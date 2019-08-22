@@ -1,0 +1,8 @@
+# Flex- and Bison-generated files
+lexer.cpp
+parser.hpp
+parser.cpp
+location.hh
+
+*.o
+seagolc
