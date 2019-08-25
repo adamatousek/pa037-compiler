@@ -37,11 +37,12 @@ ES      (\\[ntabvfr'"\\\\?])
 
 "//".*                  { /* single-line comment */ }
 "/*"                    { BEGIN( COMMENT ); assert( comment_level++ == 0 ); }
-<COMMENT>"*/"           { if ( 0 == --comment_level ) { BEGIN( INITIAL ); } }
+<COMMENT>"*"+"/"        { if ( 0 == --comment_level ) { BEGIN( INITIAL ); } }
 <COMMENT>"/*"           { ++comment_level; }
 <COMMENT>[^/*\n]*       { }
-<COMMENT>\**[^/]        { }
-<COMMENT>\/*[^*]        { }
+<COMMENT>\*+[^/\n]      { }
+<COMMENT>\/+[^*\n]      { }
+<COMMENT>[*/]$          { }
 <COMMENT><<EOF>>        { throw p::syntax_error( dummy_location,
                             "file ended inside comment" ); }
 
