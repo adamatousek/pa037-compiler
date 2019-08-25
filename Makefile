@@ -1,6 +1,6 @@
 CXXFLAGS += -g
 
-seagolc: parser.o lexer.o main.o
+seagolc: parser.o lexer.o main.o compiler.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 %.o: %.cpp
@@ -9,5 +9,5 @@ seagolc: parser.o lexer.o main.o
 lexer.cpp: lexer.l lexer.hpp
 	flex -o $@ $<
 
-parser.cpp: parser.y lexer.hpp
+parser.cpp: parser.y lexer.hpp compiler.hpp
 	bison --defines=$(<:.y=.hpp) -o $@ $<

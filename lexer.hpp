@@ -18,6 +18,42 @@ struct Lexer : yyFlexLexer {
     yy::parser::symbol_type next();
 
     yy::location loc;
+    yy::location dummy_location;
+    unsigned comment_level = 0;
+    std::string last_line;
+
+    int unescape( const char *str )
+    {
+        if ( str[0] != '\\' )
+            return str[0];
+        switch ( str[1] ) {
+        case '\'':
+        case '\"':
+        case '\\':
+        case '\?': return str[1];
+        case 'n': return '\n';
+        case 't': return '\t';
+        case 'a': return '\a';
+        case 'b': return '\b';
+        case 'v': return '\v';
+        case 'f': return '\f';
+        case 'r': return '\r';
+        }
+        _error( "unknown escape sequence" );
+    }
+
+    auto make_identifier_or_type( const char *iden )
+    {
+        // TODO: ask the driver whether the identifier names a type
+        return yy::parser::make_IDENTIFIER( iden, loc );
+    }
+
+    [[noreturn]] void _error( const std::string & msg )
+    {
+        throw yy::parser::syntax_error( loc, "lexer error: " + msg );
+    }
+
+    void readRestOfLine();
 };
 
 } /* seagol */

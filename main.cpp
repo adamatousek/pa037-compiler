@@ -1,26 +1,25 @@
 #include <iostream>
-#include <stdexcept>
+#include <fstream>
 
-#include "lexer.hpp"
-#include "parser.hpp"
+#include "compiler.hpp"
 
-namespace yy {
-parser::symbol_type yylex( seagol::Lexer &lexer ) { return lexer.next(); }
-
-[[noreturn]]
-void parser::error( const location_type &l, const std::string &m ) {
-    throw syntax_error( l, m );
-}
-}
-
-int main()
+int main( int argc, char **argv )
 {
-    seagol::Lexer lexer( std::cin, std::cout );
-    yy::parser p( lexer );
-    try {
-        return p.parse();
-    } catch ( yy::parser::syntax_error &e ) {
-        std::cerr << e.location << ": " << e.what() << std::endl;
-        return 3;
+    std::string filename = "<stdin>";
+    std::ifstream ifs;
+    bool from_stdin = true;
+    if ( argc > 1 ) {
+        filename = argv[1];
+        ifs.open( filename );
+        if ( !ifs ) {
+            std::cerr << "seagolc: cannot open file." << std::endl;
+            return 1;
+        }
+        from_stdin = false;
     }
+
+    seagol::Compiler compiler( from_stdin ? std::cin : ifs, std::cout, std::cerr );
+    compiler.setLocation( filename );
+    compiler.debug = true;
+    return compiler.run();
 }

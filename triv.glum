@@ -1,0 +1,20 @@
+// vim: ft=c
+
+int main()
+{
+    return 0;
+}
+
+int one()
+{
+    return 1;
+}
+
+    /* comment
+        /*
+         * nested
+         * comment
+         */
+    */
+
+int id( int x ) { return x; }
