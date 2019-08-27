@@ -1,20 +1,11 @@
 // vim: ft=c
 
-int main()
-{
-    return 0;
+void main( ) {
+    return;
+    return;
 }
 
-int one()
-{
-    return 1;
-}
+bool t() { return !42; }
 
-    /* comment
-        /*
-         * nested
-         * comment
-         */
-    */
-
-int id( int x ) { return x; }
+char prec( ) { return 3 > 1 + 2 * 3; }
+//int id( int x ) { return x; }

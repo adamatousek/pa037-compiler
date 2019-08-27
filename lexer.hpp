@@ -14,14 +14,19 @@
 namespace seagol {
 
 struct Lexer : yyFlexLexer {
+    /* Forward constructors */
     using yyFlexLexer::yyFlexLexer;
+
+    /* Equivalent of yylex(), implemented in Flex-generated lexer.cpp */
     yy::parser::symbol_type next();
 
+    /* Lexer state */
     yy::location loc;
     yy::location dummy_location;
     unsigned comment_level = 0;
     std::string last_line;
 
+    /* Helper functions */
     int unescape( const char *str )
     {
         if ( str[0] != '\\' )
@@ -53,7 +58,7 @@ struct Lexer : yyFlexLexer {
         throw yy::parser::syntax_error( loc, "lexer error: " + msg );
     }
 
-    void readRestOfLine();
+    void readRestOfLine(); // implementated in lexer.l
 };
 
 } /* seagol */

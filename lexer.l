@@ -5,7 +5,9 @@
 
 %{
 
-#include "compiler.hpp"
+#include "lexer.hpp"
+#include "parser.hpp"
+#include "semantic.hpp"
 typedef yy::parser::token tok;
 
 #define YY_USER_ACTION last_line += yytext; loc.columns( yyleng );
@@ -14,6 +16,7 @@ typedef yy::parser::token tok;
 typedef yy::parser p;
 %}
 
+PUNCT   [(){}\[\]<>;,.=+\-*/%!^~&|]
 HEAD    [a-zA-Z_]
 WORD    [a-zA-Z0-9_]
 ES      (\\[ntabvfr'"\\\\?])
@@ -46,18 +49,33 @@ ES      (\\[ntabvfr'"\\\\?])
 <COMMENT><<EOF>>        { throw p::syntax_error( dummy_location,
                             "file ended inside comment" ); }
 
-[(){}\[\];,+\-*/]       return {yytext[0], l};
+{PUNCT}                 return {yytext[0], l};
 
-[1-9][0-9]*             return p::make_CONSTANT_I( strtol( yytext, NULL, 10 ), l );
-0[xX][0-9a-fA-F]+       return p::make_CONSTANT_I( strtol( yytext, NULL, 16 ), l );
-0[0-9]*                 return p::make_CONSTANT_I( strtol( yytext, NULL, 8 ), l );
-[01]+[bB]               return p::make_CONSTANT_I( strtol( yytext, NULL, 2 ), l );
-\'([^'\\\n]|{ES})\'     return p::make_CONSTANT_I( unescape( yytext + 1 ), l );
-void                    return p::make_TYPE_NAME( TYPEID::VOID, l);
-int                     return p::make_TYPE_NAME( TYPEID::INT, l);
-char                    return p::make_TYPE_NAME( TYPEID::CHAR, l);
+[1-9][0-9]*             return p::make_CONSTANT_I( {64, strtol( yytext, NULL, 10)}, l );
+0[xX][0-9a-fA-F]+       return p::make_CONSTANT_I( {64, strtol( yytext, NULL, 16)}, l );
+0[0-9]*                 return p::make_CONSTANT_I( {64, strtol( yytext, NULL, 8 )}, l );
+[01]+[bB]               return p::make_CONSTANT_I( {64, strtol( yytext, NULL, 2 )}, l );
+\'([^'\\\n]|{ES})\'     return p::make_CONSTANT_I( {8, unescape( yytext + 1 )}, l );
+true                    return p::make_CONSTANT_I( {1, 1}, l );
+false                   return p::make_CONSTANT_I( {1, 0}, l );
+void                    return p::make_TYPE_NAME( {TYPEID::VOID, yytext}, l);
+int                     return p::make_TYPE_NAME( {TYPEID::INT, yytext}, l);
+char                    return p::make_TYPE_NAME( {TYPEID::CHAR, yytext}, l);
+bool                    return p::make_TYPE_NAME( {TYPEID::BOOL, yytext}, l);
 
 return                  return {tok::RETURN, l};
+
+"<<"                    return {tok::SHL, l};
+">>"                    return {tok::ASHR, l};
+"=="                    return {tok::EQ, l};
+"!="                    return {tok::NEQ, l};
+"<="                    return {tok::LEQ, l};
+">="                    return {tok::GEQ, l};
+"&&"                    return {tok::L_AND, l};
+"||"                    return {tok::L_OR, l};
+"->"                    return {tok::ARR, l};
+"++"                    return {tok::INC, l};
+"--"                    return {tok::DEC, l};
 
 {HEAD}{WORD}*           return make_identifier_or_type( yytext );
 

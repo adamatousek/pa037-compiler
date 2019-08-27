@@ -18,8 +18,10 @@ int main( int argc, char **argv )
         from_stdin = false;
     }
 
-    seagol::Compiler compiler( from_stdin ? std::cin : ifs, std::cout, std::cerr );
+    seagol::Compiler compiler( from_stdin ? std::cin : ifs, std::cout, std::cerr,
+                               from_stdin ? "output" : filename );
     compiler.setLocation( filename );
-    compiler.debug = true;
+    compiler.traceLexer( false );
+    compiler.traceParser( false );
     return compiler.run();
 }

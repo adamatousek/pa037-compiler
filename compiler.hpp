@@ -9,6 +9,7 @@
 
 #include "lexer.hpp"
 #include "parser.hpp"
+#include "context.hpp"
 
 
 namespace seagol {
@@ -22,51 +23,33 @@ struct Compiler {
     std::ostream &outf;
     std::ostream &errf;
 
+    Context ctx;
     Lexer lexer;
     yy::parser parser;
 
     bool debug = false;
 
-    Compiler( std::istream &in, std::ostream &out, std::ostream &err )
+    Compiler( std::istream &in, std::ostream &out, std::ostream &err,
+              const std::string &name )
         : inf( in )
         , outf( out )
         , errf( err )
+        , ctx( name )
         , lexer( in, out )
-        , parser( *this, lexer )
+        , parser( ctx, lexer )
     {
         outf << "This is Seagol compiler version 0.0.0-alpha." << std::endl;
+        parser.set_debug_stream( err );
     }
 
     int run();
 
     void setLocation( const std::string &file,
                       unsigned line = 1, unsigned column = 1);
+
+    void traceLexer( bool trace = true ) { lexer.set_debug( trace ); }
+    void traceParser( bool trace = true ) { parser.set_debug_level( trace ); }
 };
-
-/*
- * Semantic types for parser
- */
-
-struct ExprAttr {
-    /*llvm::Type*/ void *type;
-    /*llvm::Value*/ void *val;
-};
-
-/*
- * Various declarations
- */
-
-/* IDs of primitive types */
-struct TYPEID {
-    enum : uint16_t {
-        UNKNOWN = 0,
-        VOID,
-        INT,
-        CHAR,
-        _last_
-    };
-};
-
 
 } /* seagol */
 
