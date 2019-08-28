@@ -1,11 +1,8 @@
 // vim: ft=c
 
+bool foo( bool, bool, bool );
+
 void main( ) {
-    return;
+    int x = 0;
     return;
 }
-
-bool t() { return !42; }
-
-char prec( ) { return 3 > 1 + 2 * 3; }
-//int id( int x ) { return x; }

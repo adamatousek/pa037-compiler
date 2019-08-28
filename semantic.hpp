@@ -73,26 +73,54 @@ struct Value {
     llvm::Value *llval;
 
     struct Category {
-        uint8_t addressable : 1;
+        uint8_t addressable : 1; // If 1, then then llval is the address
         uint8_t constant    : 1;
         uint8_t assignable  : 1;
         uint8_t callable    : 1;
     } cat;
     bool addressable() const { return cat.addressable; }
+    bool loadable() const { return cat.addressable & !cat.callable; }
     bool constant() const { return cat.constant; }
     bool assignable() const { return cat.assignable; }
     bool callable() const { return cat.callable; }
     void setCategory( Category category ) { cat = category; }
 
-    llvm::Type* type() { return llval->getType(); }
+    llvm::Type* type() const {
+        if ( addressable() ) {
+            assert( llvm::isa< llvm::PointerType >( llval->getType() ) );
+            return llval->getType()->getPointerElementType();
+        }
+        return llval->getType();
+    }
+    void rvalise() { cat.addressable = 0; cat.assignable = 0; }
 
-    static constexpr Category LVALUE = { 1, 0, 1, 0 };
-    static constexpr Category RVALUE = { 0, 0, 0, 0 };
-    static constexpr Category CVALUE = { 0, 1, 0, 0 };
-    static constexpr Category FVALUE = { 1, 0, 0, 1 };
+    // only for constant expressions!
+    bool getBool() const {
+        assert( constant() );
+        return ! llvm::cast< llvm::Constant >( llval )->isZeroValue();
+    }
+
+    static const Category LVALUE;
+    static const Category RVALUE;
+    static const Category CVALUE;
+    static const Category FVALUE;
 };
 
 using ExprInfo = Value;
+
+struct CallInfo {
+    llvm::FunctionType::param_iterator param_it;
+    llvm::FunctionType::param_iterator param_end;
+    llvm::Function* fn;
+    std::vector<llvm::Value*> args;
+};
+using CallInfo_u = std::unique_ptr< CallInfo >;
+
+struct BoolJump {
+    llvm::BasicBlock *bb_true;
+    llvm::BasicBlock *bb_false;
+    llvm::BasicBlock *bb_cont;
+};
 
 } /* seagol */
 

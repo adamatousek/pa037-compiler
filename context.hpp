@@ -26,7 +26,7 @@ struct Context {
 
     llvm::Type* get_type( typeid_t );
     bool coercible( llvm::Type *, llvm::Type * );
-    ExprInfo coerce( ExprInfo, llvm::Type * );
+    ExprInfo coerce( ExprInfo, llvm::Type *, bool rvalise = true );
     std::string format_type( llvm::Type* ) const;
 
     void open_scope();
@@ -42,10 +42,15 @@ struct Context {
     void end_fun();
     void after_return();
 
+    std::string push_param( CallInfo*, const ExprInfo & );
+
+    ExprInfo mk_bin( const ExprInfo &, const ExprInfo &, llvm::Value* );
     ExprInfo mk_arith( const ExprInfo &, const ExprInfo &,
                        llvm::Instruction::BinaryOps );
     ExprInfo mk_cmp( const ExprInfo &, const ExprInfo &,
                      llvm::CmpInst::Predicate );
+
+    llvm::BasicBlock* mk_bb( const llvm::Twine &name = "" );
 
     Context( const std::string & name )
         : llmodule( new llvm::Module( name, llcontext ) )

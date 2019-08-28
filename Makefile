@@ -7,7 +7,7 @@ SEAGOL_DEFINES = -DSEAGOL_RELAX_WARNINGS="_Pragma( \"GCC diagnostic push\" ) \
      _Pragma( \"GCC diagnostic ignored \\\"-Wunused-parameter\\\"\" )" \
      -DSEAGOL_UNRELAX_WARNINGS="_Pragma( \"GCC diagnostic pop\" )"
 
-CXXFLAGS += -g -Wall -Wextra -pedantic $(llvmFLAGS) $(SEAGOL_DEFINES)
+CXXFLAGS += -std=c++14 -g -Wall -Wextra -pedantic $(llvmFLAGS) $(SEAGOL_DEFINES)
 LDFLAGS += $(llvmLDFLAGS)
 
 seagolc: parser.o lexer.o main.o compiler.o context.o
@@ -20,4 +20,4 @@ lexer.cpp: lexer.l lexer.hpp parser.hpp
 	flex -o $@ $<
 
 parser.cpp: parser.y compiler.hpp semantic.hpp
-	bison --defines=$(<:.y=.hpp) -o $@ $<
+	bison $(YACCFLAGS) --defines=$(<:.y=.hpp) -o $@ $<

@@ -30,7 +30,7 @@ int Compiler::run()
         return 1;
     }
 
-    errf << "seagolc: compilation successful" << std::endl;
+    errf << "seagolc: compilation successful\nLLVM bitcode:\n" << std::endl;
 
     // TODO: select correct stream
     ctx.llmodule->print(llvm::outs(), nullptr);

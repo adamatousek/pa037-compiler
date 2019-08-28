@@ -28,6 +28,10 @@ namespace yy {
 parser::symbol_type yylex( seagol::Lexer & );
 }
 
+void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
+                      const yy::parser::location_type &loc,
+                      yy::parser &p );
+
 #define pt( t ) (ctx.format_type(( t )))
 #define IRB (ctx.irb)
 #define NOT_IMPLEMENTED(l) do { error( (l), "NOT IMPLEMENTED" ); } while(0);
@@ -83,10 +87,16 @@ parser::symbol_type yylex( seagol::Lexer & );
 %type <seagol::IdentifierInfo*> fresh_identifier
 %type <seagol::IdentifierInfo*> identifier
 %type <seagol::IdentifierInfo*> argument_decl
+%type <seagol::IdentifierInfo*> declaration
 
 %type <seagol::ArgumentList> arguments
 %type <seagol::ArgumentList> argument_decl_list
 
+%type <seagol::CallInfo_u> _fn
+%type <seagol::CallInfo*> arg_list
+%type <seagol::ExprInfo> _mkcall
+
+%type <seagol::ExprInfo> arg
 %type <seagol::ExprInfo> expression
 %type <seagol::ExprInfo> conditional_expr
 %type <seagol::ExprInfo> expr
@@ -125,6 +135,12 @@ _coerce : %empty {
          } ;
 _bool : %empty { $$ = IRB.getInt1Ty(); }
 _i64 : %empty { $$ = IRB.getInt64Ty(); }
+
+/* Usage in rules: <ExprInfo> _lvalue */
+_lvalue: %empty {
+            if ( ! $<seagol::ExprInfo>0.assignable() )
+                error( @0, "expecting an lvalue" );
+        } ;
 
 toplevel
     : toplevel_entry_list END_OF_FILE
@@ -260,25 +276,92 @@ statement
     }
     | RETURN expression <llvm::Type*>{ $$ = IRB.getCurrentFunctionReturnType(); }
       _coerce[res] ';' { IRB.CreateRet( $res.llval ); ctx.after_return(); }
+    | ';'
+    | expression ';'
+    | declaration ';'
+    | declaration[l] '=' expression <llvm::Type*>{ $$ = $l->type; } _coerce[r] ';'
+        { IRB.CreateStore( $r.llval, $l->llval ); }
+    ;
+
+declaration
+    : type fresh_identifier {
+        $$ = $2;
+        $$->type = $1;
+        $$->llval = IRB.CreateAlloca( $$->type, nullptr, $$->name + ".addr" );
+    }
     ;
 
 expression
     : conditional_expr
-    | unary_expr '=' expression { NOT_IMPLEMENTED(@$) }
+    | unary_expr[l] _lvalue '=' expression <llvm::Type*>{ $$ = $l.type(); } _coerce[r]
+    {
+        IRB.CreateStore( $r.llval, $l.llval );
+        $$ = $l;
+    }
     ;
 
 conditional_expr
     : expr
-    | expr _bool _coerce[p] '?' expression[t] ':' conditional_expr[f] { NOT_IMPLEMENTED(@$) }
+    | expr _bool _coerce[p] '?' {
+        NOT_IMPLEMENTED(@$)
+        /*
+        auto *bb_cont = ctx.mk_bb( "cond.cont" );
+        auto *bb_false = ctx.mk_bb( "cond.false" );
+        auto *bb_true = ctx.mk_bb( "cond.true" );
+        IRB.CreateCondBr( $p.llval, bb_true, bb_false );
+        IRB.SetInsertPoint( bb_true );
+        $$ = { bb_true, bb_false, bb_cont };
+        */
+    }[br] expression[t] ':' {
+        /*
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_false );
+        */
+    }     conditional_expr[f] {
+        /*
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_cont );
+        // TODO
+        */
+    }
     ;
 
+/* TODO: constexpr folding */
 expr
     : arith_expr
-    | bexpr L_OR  bexpr { NOT_IMPLEMENTED(@$) }
-    | bexpr L_AND bexpr { NOT_IMPLEMENTED(@$) }
+    | bexpr[l] L_OR <seagol::BoolJump>{
+        auto *bb_this = IRB.GetInsertBlock();
+        auto *bb_cont = ctx.mk_bb( "or.cont" );
+        auto *bb_false = ctx.mk_bb( "or.false" );
+        IRB.CreateCondBr( $1.llval, bb_cont, bb_false );
+        IRB.SetInsertPoint( bb_false );
+        $$ = { bb_this, bb_cont, nullptr };
+    }[br] bexpr[r] {
+        IRB.CreateBr( $br.bb_false );
+        IRB.SetInsertPoint( $br.bb_false );
+        auto *phi = IRB.CreatePHI( IRB.getInt1Ty(), 2 );
+        phi->addIncoming( IRB.getTrue(), $br.bb_true );
+        phi->addIncoming( $r.llval, $br.bb_false );
+        $$ = ctx.mk_bin( $l, $r, phi );
+    }
+    | bexpr[l] L_AND <seagol::BoolJump>{
+        auto *bb_this = IRB.GetInsertBlock();
+        auto *bb_cont = ctx.mk_bb( "or.cont" );
+        auto *bb_true = ctx.mk_bb( "and.true" );
+        IRB.CreateCondBr( $1.llval, bb_true, bb_cont );
+        IRB.SetInsertPoint( bb_true );
+        $$ = { bb_cont, bb_this, nullptr };
+    }[br] bexpr[r] {
+        IRB.CreateBr( $br.bb_true );
+        IRB.SetInsertPoint( $br.bb_true );
+        auto *phi = IRB.CreatePHI( IRB.getInt1Ty(), 2 );
+        phi->addIncoming( IRB.getFalse(), $br.bb_false );
+        phi->addIncoming( $r.llval, $br.bb_true );
+        $$ = ctx.mk_bin( $l, $r, phi );
+    }
     ;
 
-bexpr: expr _bool _coerce ;
+bexpr: expr _bool _coerce[res] { $$ = $res; } ;
 
 arith_expr
     : cast_expr
@@ -300,7 +383,7 @@ arith_expr
     | aexpr  '<' aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_SLT ); }
     ;
 
-aexpr: arith_expr _i64 _coerce ; /* TODO: actual integer promotion */
+aexpr: arith_expr _i64 _coerce[res] { $$ = $res; } ; /* TODO: actual integer promotion */
 
 cast_expr
     : unary_expr
@@ -313,6 +396,9 @@ unary_expr
         $$ = $res;
         $$.llval = IRB.CreateNeg( $res.llval );
     }
+    | '+' cast_expr _i64  _coerce[res] %prec UNARY_PLUS {
+        $$ = $res;
+    }
     | '!' cast_expr _bool _coerce[res] {
         $$ = $res;
         $$.llval = IRB.CreateNot( $res.llval );
@@ -321,13 +407,66 @@ unary_expr
 
 postfix_expr
     : primary_expr
+    | postfix_expr '(' _fn <seagol::CallInfo*>{ $$ = $3.get(); } ')' _mkcall[c] { $$ = $c; }
+    | postfix_expr '(' _fn arg_list ')' _mkcall[c] { $$ = $c; }
     ;
 
+arg_list
+    : arg {
+        $$ = $<seagol::CallInfo_u>0.get();
+        auto err = ctx.push_param( $$, $1 );
+        if ( !err.empty() )
+            error( @1, err );
+    }
+    | arg_list ',' arg {
+        $$ = $1;
+        auto err = ctx.push_param( $$, $3 );
+        if ( !err.empty() )
+            error( @3, err );
+    }
+    ;
+
+arg : expression ;
+
+_fn : %empty {
+          auto fn_expr = $<seagol::ExprInfo>-1;
+          if ( auto *fn = llvm::dyn_cast< llvm::Function >( fn_expr.llval ) ) {
+              $$.reset( new seagol::CallInfo{} );
+              $$->fn = fn;
+              $$->param_it = fn->getFunctionType()->param_begin();
+              $$->param_end = fn->getFunctionType()->param_end();
+          } else {
+              error( @0, "cannot call to a non-callable value" );
+          }
+      } ;
+
+_mkcall : %empty {
+              auto *ci = $<seagol::CallInfo*>-1;
+              unsigned argc_req = ci->fn->arg_size();
+              unsigned argc = ci->args.size();
+              if ( argc < argc_req )
+                  error( @0, "too few arguments for call to type `"s +
+                          pt( ci->fn->getType() ) + "\': requested " +
+                          std::to_string( argc_req ) + ", but only " +
+                          std::to_string( argc ) + " provided" );
+              $$.cat = seagol::Value::RVALUE;
+              $$.llval = IRB.CreateCall( ci->fn, ci->args );
+          } ;
+
+
 primary_expr
-    : identifier { NOT_IMPLEMENTED(@$) }
+    : identifier {
+        $$.llval = $1->llval;
+        if ( llvm::isa< llvm::Function >( $$.llval ) ) {
+            $$.cat = seagol::Value::FVALUE;
+        } else {
+            $$.cat = seagol::Value::LVALUE;
+        }
+    }
     | CONSTANT_I {
         $$.llval = IRB.getIntN( $1.width, $1.number );
         $$.cat = seagol::Value::CVALUE;
     }
     | '(' expression ')' { $$ = $2; }
     ;
+

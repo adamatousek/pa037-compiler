@@ -25,3 +25,12 @@ int main( int argc, char **argv )
     compiler.traceParser( false );
     return compiler.run();
 }
+
+namespace llvm {
+void Value::dump() const {
+    this->print( llvm::outs(), true );
+}
+void Type::dump() const {
+    this->print( llvm::outs(), true );
+}
+} /* llvm */

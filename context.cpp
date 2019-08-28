@@ -2,6 +2,11 @@
 
 namespace seagol {
 
+const Value::Category Value::LVALUE = { 1, 0, 1, 0 };
+const Value::Category Value::RVALUE = { 0, 0, 0, 0 };
+const Value::Category Value::CVALUE = { 0, 1, 0, 0 };
+const Value::Category Value::FVALUE = { 1, 0, 0, 1 };
+
 llvm::Type* Context::get_type( typeid_t id )
 {
     switch ( id ) {
@@ -22,6 +27,9 @@ std::string Context::format_type( llvm::Type *ty ) const
     if ( ty->isIntegerTy( 16 ) ) return "short";
     if ( ty->isIntegerTy( 8 ) ) return "char";
     if ( ty->isIntegerTy( 1 ) ) return "bool";
+    if ( auto *pty = llvm::dyn_cast< llvm::PointerType >( ty ) ) {
+        return "<*>";
+    }
     if ( auto *fty = llvm::dyn_cast< llvm::FunctionType >( ty ) ) {
         std::string s = format_type( fty->getReturnType() ) + "(*)(";
         bool first = true;
@@ -41,13 +49,20 @@ bool Context::coercible( llvm::Type *from, llvm::Type *to )
 {
     if ( from == to )
         return true;
+    if ( from->isVoidTy() )
+        return false;
     if ( from->isIntegerTy() && to->isIntegerTy() )
         return true;
     return false;
 }
 
-ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to )
+ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to, bool rvalise )
 {
+    if ( rvalise && expr.loadable() ) {
+        expr.rvalise();
+        expr.llval = irb.CreateLoad( expr.llval );
+    }
+
     auto *from = expr.type();
     if ( from == to )
         return expr;
@@ -55,13 +70,15 @@ ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to )
         if ( from->getIntegerBitWidth() == 1 ) {
             expr.llval = irb.CreateZExt( expr.llval, to );
         } else if ( to->getIntegerBitWidth() == 1 ) {
-            expr.llval = irb.CreateICmpNE( expr.llval, irb.getFalse() );
+            expr.llval = irb.CreateICmpNE( expr.llval,
+                    irb.getIntN( from->getIntegerBitWidth(), 0 ) );
         } else {
             if ( from->getIntegerBitWidth() > to->getIntegerBitWidth() ) {
                 // TODO: emit a warning
             }
             expr.llval = irb.CreateSExtOrTrunc( expr.llval, to );
         }
+        expr.rvalise();
     }
     return expr;
 }
@@ -99,7 +116,7 @@ IdentifierInfo* Context::decl_id( const std::string &ident )
 
 IdentifierInfo* Context::gen_id( const std::string & root )
 {
-    return decl_id( root + '$' + std::to_string( seed++ ) );
+    return decl_id( '.' + root + '-' + std::to_string( seed++ ) );
 }
 
 IdentifierInfo* Context::mk_arg( llvm::Type* ty, IdentifierInfo* ii )
@@ -144,7 +161,16 @@ void Context::start_fun( IdentifierInfo *fii, const ArgumentList & args )
     auto argii_it = args.args.begin();
     for ( llvm::Argument &arg : fn->args() ) {
         assert( ! (*argii_it)->llval );
-        (*argii_it)->llval = &arg;
+        auto name = (*argii_it)->name;
+        arg.setName( name );
+        if ( arg.getName().startswith( ".arg-" ) ) /* unnamed */ {
+            (*argii_it)->llval = &arg;
+        } else {
+            auto *argaddr = irb.CreateAlloca( arg.getType(), nullptr, name + ".addr" );
+            irb.CreateStore( &arg, argaddr );
+            (*argii_it)->llval = argaddr;
+        }
+        ++argii_it;
     }
 
     bb_trash->insertInto( fn );
@@ -160,15 +186,35 @@ void Context::after_return()
     irb.SetInsertPoint( bb_trash );
 }
 
-ExprInfo Context::mk_arith( const ExprInfo &l, const ExprInfo &r,
-                            llvm::Instruction::BinaryOps op )
+std::string Context::push_param( CallInfo* ci, const ExprInfo &arg )
+{
+    if ( ci->param_it == ci->param_end )
+        return std::string( "too many arguments (function requires " ) +
+            std::to_string( ci->fn->arg_size() ) + ')';
+    if ( !coercible( arg.type(), *ci->param_it ) )
+        return std::string( "invalid conversion from `" ) +
+            format_type( arg.type() ) + "\' to `" + format_type( *ci->param_it )
+            + "\' on argument " + std::to_string( ci->args.size() + 1 );
+    ci->args.push_back( coerce( arg, *ci->param_it ).llval );
+    ci->param_it++;
+    return {};
+}
+
+ExprInfo Context::mk_bin( const ExprInfo &l, const ExprInfo &r,
+                          llvm::Value *val )
 {
     ExprInfo res;
     res.cat = ExprInfo::RVALUE;
     res.cat.constant = l.constant() && r.constant();
-    res.llval = irb.CreateBinOp( op, l.llval, r.llval );
+    res.llval = val;
     return res;
 }
+ExprInfo Context::mk_arith( const ExprInfo &l, const ExprInfo &r,
+                            llvm::Instruction::BinaryOps op )
+{
+    return mk_bin( l, r, irb.CreateBinOp( op, l.llval, r.llval ) );
+}
+
 ExprInfo Context::mk_cmp( const ExprInfo &l, const ExprInfo &r,
                           llvm::CmpInst::Predicate p )
 {
@@ -177,6 +223,15 @@ ExprInfo Context::mk_cmp( const ExprInfo &l, const ExprInfo &r,
     res.cat.constant = l.constant() && r.constant();
     res.llval = irb.CreateICmp( p, l.llval, r.llval );
     return res;
+}
+
+llvm::BasicBlock* Context::mk_bb( const llvm::Twine &name )
+{
+    auto *bb_this = irb.GetInsertBlock();
+    auto *fn = bb_this->getParent();
+    auto *bb_next = fn->getBasicBlockList().getNextNode( *bb_this );
+    auto *bb = llvm::BasicBlock::Create( llcontext, name, fn, bb_next );
+    return bb;
 }
 
 } /* seagol */
