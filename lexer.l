@@ -64,6 +64,8 @@ char                    return p::make_TYPE_NAME( {TYPEID::CHAR, yytext}, l);
 bool                    return p::make_TYPE_NAME( {TYPEID::BOOL, yytext}, l);
 
 return                  return {tok::RETURN, l};
+if                      return {tok::IF, l};
+else                    return {tok::ELSE, l};
 
 "<<"                    return {tok::SHL, l};
 ">>"                    return {tok::ASHR, l};

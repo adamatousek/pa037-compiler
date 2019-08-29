@@ -116,10 +116,15 @@ struct CallInfo {
 };
 using CallInfo_u = std::unique_ptr< CallInfo >;
 
-struct BoolJump {
+struct IfInfo {
     llvm::BasicBlock *bb_true;
     llvm::BasicBlock *bb_false;
     llvm::BasicBlock *bb_cont;
+
+    bool operator==( const IfInfo &o ) const {
+        return bb_true == o.bb_true && bb_false == o.bb_false && bb_cont == o.bb_cont;
+    }
+    bool operator!=( const IfInfo &o ) const { return ! ( *this == o ) ; }
 };
 
 } /* seagol */

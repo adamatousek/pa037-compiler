@@ -50,6 +50,8 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token <seagol::ConstantInt> CONSTANT_I "integral constant"
 
 %token RETURN "return"
+%token IF "if"
+%token ELSE "else"
 
 %token ';' '(' ')' '{' '}' '!' '?' ':'
 %token L_OR "||"
@@ -64,6 +66,9 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token ARR "->"
 %token INC "++"
 %token DEC "--"
+
+%nonassoc ELSELESS
+%nonassoc ELSE
 
 %left L_OR
 %left L_AND
@@ -108,6 +113,8 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <seagol::ExprInfo> postfix_expr
 %type <seagol::ExprInfo> primary_expr
 %type <seagol::ExprInfo> _coerce
+
+%type <seagol::IfInfo> _if
 
 %start toplevel
 
@@ -268,6 +275,7 @@ stmt_list
 
 statement
     : block_stmt
+    | if_stmt
     | RETURN ';' {
         auto *rty = IRB.getCurrentFunctionReturnType();
         if ( ! rty->isVoidTy() )
@@ -290,6 +298,47 @@ declaration
         $$->llval = IRB.CreateAlloca( $$->type, nullptr, $$->name + ".addr" );
     }
     ;
+
+if_stmt
+    : IF _if[br] '(' expression _bool _coerce ')' _then statement ELSE _else statement
+    {
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_cont );
+    } ;
+    | IF _if[br] '(' expression _bool _coerce ')' _then statement %prec ELSELESS
+    {
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_false );
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_cont );
+    }
+    ;
+
+_if: %empty
+    {
+        auto *bb_cont = ctx.mk_bb( "if.cont" );
+        auto *bb_false = ctx.mk_bb( "if.false" );
+        auto *bb_true = ctx.mk_bb( "if.true" );
+        ctx.jmp_stack.push({ bb_true, bb_false, bb_cont });
+        $$ = { bb_true, bb_false, bb_cont };
+    };
+
+_then: %empty
+    {
+        auto & _if = $<seagol::IfInfo>-5;
+        auto & pred_expr = $<seagol::ExprInfo>-1;
+        IRB.CreateCondBr( pred_expr.llval, _if.bb_true, _if.bb_false );
+        IRB.SetInsertPoint( _if.bb_true );
+        assert( ctx.jmp_stack.top() == _if );
+        ctx.jmp_stack.pop();
+    } ;
+
+_else: %empty
+    {
+        auto & _if = $<seagol::IfInfo>-8;
+        IRB.CreateBr( _if.bb_cont );
+        IRB.SetInsertPoint( _if.bb_false );
+    } ;
 
 expression
     : conditional_expr
@@ -329,7 +378,7 @@ conditional_expr
 /* TODO: constexpr folding */
 expr
     : arith_expr
-    | bexpr[l] L_OR <seagol::BoolJump>{
+    | bexpr[l] L_OR <seagol::IfInfo>{
         auto *bb_this = IRB.GetInsertBlock();
         auto *bb_cont = ctx.mk_bb( "or.cont" );
         auto *bb_false = ctx.mk_bb( "or.false" );
@@ -344,7 +393,7 @@ expr
         phi->addIncoming( $r.llval, $br.bb_false );
         $$ = ctx.mk_bin( $l, $r, phi );
     }
-    | bexpr[l] L_AND <seagol::BoolJump>{
+    | bexpr[l] L_AND <seagol::IfInfo>{
         auto *bb_this = IRB.GetInsertBlock();
         auto *bb_cont = ctx.mk_bb( "or.cont" );
         auto *bb_true = ctx.mk_bb( "and.true" );
