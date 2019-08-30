@@ -304,7 +304,7 @@ if_stmt
     {
         IRB.CreateBr( $br.bb_cont );
         IRB.SetInsertPoint( $br.bb_cont );
-    } ;
+    }
     | IF _if[br] '(' expression _bool _coerce ')' _then statement %prec ELSELESS
     {
         IRB.CreateBr( $br.bb_cont );
@@ -319,7 +319,6 @@ _if: %empty
         auto *bb_cont = ctx.mk_bb( "if.cont" );
         auto *bb_false = ctx.mk_bb( "if.false" );
         auto *bb_true = ctx.mk_bb( "if.true" );
-        ctx.jmp_stack.push({ bb_true, bb_false, bb_cont });
         $$ = { bb_true, bb_false, bb_cont };
     };
 
@@ -329,8 +328,6 @@ _then: %empty
         auto & pred_expr = $<seagol::ExprInfo>-1;
         IRB.CreateCondBr( pred_expr.llval, _if.bb_true, _if.bb_false );
         IRB.SetInsertPoint( _if.bb_true );
-        assert( ctx.jmp_stack.top() == _if );
-        ctx.jmp_stack.pop();
     } ;
 
 _else: %empty
@@ -380,32 +377,34 @@ expr
     : arith_expr
     | bexpr[l] L_OR <seagol::IfInfo>{
         auto *bb_this = IRB.GetInsertBlock();
-        auto *bb_cont = ctx.mk_bb( "or.cont" );
-        auto *bb_false = ctx.mk_bb( "or.false" );
-        IRB.CreateCondBr( $1.llval, bb_cont, bb_false );
-        IRB.SetInsertPoint( bb_false );
-        $$ = { bb_this, bb_cont, nullptr };
+        auto *bb_post = ctx.mk_bb( "or.post" );
+        auto *bb_right = ctx.mk_bb( "or.right" );
+        IRB.CreateCondBr( $l.llval, bb_post, bb_right );
+        IRB.SetInsertPoint( bb_right );
+        $$ = { bb_this, bb_right, bb_post };
     }[br] bexpr[r] {
-        IRB.CreateBr( $br.bb_false );
-        IRB.SetInsertPoint( $br.bb_false );
+        auto *bb_right = IRB.GetInsertBlock();
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_cont );
         auto *phi = IRB.CreatePHI( IRB.getInt1Ty(), 2 );
         phi->addIncoming( IRB.getTrue(), $br.bb_true );
-        phi->addIncoming( $r.llval, $br.bb_false );
+        phi->addIncoming( $r.llval, bb_right );
         $$ = ctx.mk_bin( $l, $r, phi );
     }
     | bexpr[l] L_AND <seagol::IfInfo>{
         auto *bb_this = IRB.GetInsertBlock();
-        auto *bb_cont = ctx.mk_bb( "or.cont" );
-        auto *bb_true = ctx.mk_bb( "and.true" );
-        IRB.CreateCondBr( $1.llval, bb_true, bb_cont );
-        IRB.SetInsertPoint( bb_true );
-        $$ = { bb_cont, bb_this, nullptr };
+        auto *bb_post = ctx.mk_bb( "and.post" );
+        auto *bb_right = ctx.mk_bb( "and.right" );
+        IRB.CreateCondBr( $l.llval, bb_post, bb_right );
+        IRB.SetInsertPoint( bb_right );
+        $$ = { bb_right, bb_this, bb_post };
     }[br] bexpr[r] {
-        IRB.CreateBr( $br.bb_true );
-        IRB.SetInsertPoint( $br.bb_true );
+        auto *bb_right = IRB.GetInsertBlock();
+        IRB.CreateBr( $br.bb_cont );
+        IRB.SetInsertPoint( $br.bb_cont );
         auto *phi = IRB.CreatePHI( IRB.getInt1Ty(), 2 );
         phi->addIncoming( IRB.getFalse(), $br.bb_false );
-        phi->addIncoming( $r.llval, $br.bb_true );
+        phi->addIncoming( $r.llval, bb_right );
         $$ = ctx.mk_bin( $l, $r, phi );
     }
     ;

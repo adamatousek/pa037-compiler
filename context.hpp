@@ -21,7 +21,6 @@ struct Context {
     llvm::LLVMContext llcontext;
     std::unique_ptr< llvm::Module > llmodule;
     std::vector< ScopeInfo > scope_stack;
-    std::stack< IfInfo, std::vector<IfInfo> > jmp_stack;
     llvm::IRBuilder<> irb;
     llvm::BasicBlock* bb_trash;
     uint16_t seed = 0;
