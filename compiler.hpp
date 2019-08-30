@@ -7,6 +7,10 @@
 #include <ostream>
 #include <stdexcept>
 
+SEAGOL_RELAX_WARNINGS
+#include <llvm/Target/TargetMachine.h>
+SEAGOL_UNRELAX_WARNINGS
+
 #include "lexer.hpp"
 #include "parser.hpp"
 #include "context.hpp"
@@ -38,7 +42,7 @@ struct Compiler {
         , lexer( in, out )
         , parser( ctx, lexer )
     {
-        outf << "This is Seagol compiler version 0.0.0-alpha." << std::endl;
+        errf << "This is Seagol compiler version 0.0.0-alpha." << std::endl;
         parser.set_debug_stream( err );
     }
 
@@ -49,6 +53,11 @@ struct Compiler {
 
     void traceLexer( bool trace = true ) { lexer.set_debug( trace ); }
     void traceParser( bool trace = true ) { parser.set_debug_level( trace ); }
+
+private:
+    std::string target_triple;
+    llvm::TargetMachine *target_machine;
+    bool prepare_target();
 };
 
 } /* seagol */
