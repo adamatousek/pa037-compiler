@@ -1,0 +1,36 @@
+// vim: ft=c
+
+
+int ptr() {
+    int x = 0x42;
+    int * px = &x;
+    int ** ppx = &px;
+    return **ppx;
+}
+
+int ptrcmp() {
+    int x = 0x42;
+    int y = 0x66;
+    int *px = &x;
+    int *py;
+    py = &y;
+    if ( px > py )
+        return *px;
+    return *py;
+}
+
+int fptr() {
+    int (*)() f = *ptr;
+    int (*)() *pf = &f;
+    *pf = ptrcmp;
+    int (*)() f2 = *pf;
+    return f() + f2() + (*pf)();
+}
+
+int add( int x, long y ) { return x + y; }
+
+int fptr2() {
+    int (*)(int, long) f;
+    f = add;
+    return f(5, f(4, 6));
+}
