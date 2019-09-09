@@ -104,7 +104,6 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 
 %type <seagol::ExprInfo> arg
 %type <seagol::ExprInfo> expression
-%type <seagol::ExprInfo> conditional_expr
 %type <seagol::ExprInfo> expr
 %type <seagol::ExprInfo> bexpr
 %type <seagol::ExprInfo> aexpr
@@ -130,6 +129,7 @@ _close : %empty { ctx.close_scope(); } ;
 
 /* usage in rules: ... <ExprInfo> <llvm::Type*> _coerce[res] ... */
 _coerce : %empty {
+             @$ = @-1;
              auto *to_type = $<llvm::Type*>0;
              auto &from_ex = $<seagol::ExprInfo>-1;
              auto *from_type = from_ex.type();
@@ -201,15 +201,30 @@ toplevel_entry
         /* using complete_type introduces a shift/reduce conflict */
         if ( $1->isVoidTy() )
             error( @$, "void type is not allowed here" );
-        /* TODO check whether types match */
+        llvm::Type *oldt;
+        if ( ! ctx.decl_global( $vii, $ty, &oldt ) )
+            error( @$, "`"s + $vii->name + "\' was already declared with type `"
+                    + pt( oldt ) + "\'" );
     }
     /* global variable definition */
     | returnable_type[ty] toplevel_identifier[vii] '=' {
         /* using complete_type introduces a shift/reduce conflict */
         if ( $1->isVoidTy() )
             error( @$, "void type is not allowed here" );
-        /* TODO check whether types match */
-    }   conditional_expr ';'
+        llvm::Type *oldt;
+        if ( ! ctx.decl_global( $vii, $ty, &oldt ) )
+            error( @$, "`"s + $vii->name + "\' was already declared with type `"
+                    + pt( oldt ) + "\'" );
+        if ( llvm::cast< llvm::GlobalVariable >( $vii->llval )->hasInitializer() )
+            error( @vii, "`"s + $vii->name + "\' was already initialised" );
+        IRB.SetInsertPoint( ctx.bb_trash );
+    }   expr <llvm::Type*>{ $$ = $ty; } _coerce[ini] ';' {
+        if ( auto *cexpr = llvm::dyn_cast< llvm::Constant >( $ini.llval ) ) {
+            llvm::cast< llvm::GlobalVariable >( $vii->llval )->setInitializer( cexpr );
+        } else
+            error( @ini, "expression is not (blatantly) constant" );
+
+    }
     ;
 
 toplevel_identifier /* may or may not be already declared */
@@ -372,37 +387,11 @@ _else: %empty
     } ;
 
 expression
-    : conditional_expr
+    : expr
     | unary_expr[l] _lvalue '=' expression <llvm::Type*>{ $$ = $l.type(); } _coerce[r]
     {
         IRB.CreateStore( $r.llval, $l.llval );
         $$ = $l;
-    }
-    ;
-
-conditional_expr
-    : expr
-    | expr _bool _coerce[p] '?' {
-        NOT_IMPLEMENTED(@$)
-        /*
-        auto *bb_cont = ctx.mk_bb( "cond.cont" );
-        auto *bb_false = ctx.mk_bb( "cond.false" );
-        auto *bb_true = ctx.mk_bb( "cond.true" );
-        IRB.CreateCondBr( $p.llval, bb_true, bb_false );
-        IRB.SetInsertPoint( bb_true );
-        $$ = { bb_true, bb_false, bb_cont };
-        */
-    }[br] expression[t] ':' {
-        /*
-        IRB.CreateBr( $br.bb_cont );
-        IRB.SetInsertPoint( $br.bb_false );
-        */
-    }     conditional_expr[f] {
-        /*
-        IRB.CreateBr( $br.bb_cont );
-        IRB.SetInsertPoint( $br.bb_cont );
-        // TODO
-        */
     }
     ;
 

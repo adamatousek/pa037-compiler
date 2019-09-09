@@ -1,5 +1,9 @@
 // vim: ft=c
 
+int global_var;
+int global_var = 0x42;
+int answer = 40 + 2;
+
 int factorial( int x ) {
     if ( x == 0 )
         return 1;

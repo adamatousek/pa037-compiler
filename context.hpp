@@ -43,6 +43,8 @@ struct Context {
     IdentifierInfo* decl_id( const std::string & );
     IdentifierInfo* gen_id( const std::string & );
 
+    bool decl_global( IdentifierInfo*, llvm::Type*, llvm::Type** );
+
     IdentifierInfo* mk_arg( llvm::Type*, IdentifierInfo* );
     bool /*TODO*/ decl_fun( IdentifierInfo*, llvm::Type*, const ArgumentList &,
                             llvm::Type** );

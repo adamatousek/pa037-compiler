@@ -149,6 +149,25 @@ IdentifierInfo* Context::gen_id( const std::string & root )
     return decl_id( '.' + root + '-' + std::to_string( seed++ ) );
 }
 
+bool Context::decl_global( IdentifierInfo* var, llvm::Type* type,
+                           llvm::Type** old_type )
+{
+    if ( var->type ) {
+        if ( type != var->type ) { /* redeclaration with different type */
+            if ( old_type )
+                *old_type = var->type;
+            return false;
+        }
+        /* redeclaration with the same type */
+        return true;
+    }
+
+    /* new declaration */
+    var->type = type;
+    var->llval = llmodule->getOrInsertGlobal( var->name, type );
+    return true;
+}
+
 IdentifierInfo* Context::mk_arg( llvm::Type* ty, IdentifierInfo* ii )
 {
     assert( !ii->llval );
@@ -171,8 +190,8 @@ bool /*TODO*/ Context::decl_fun( IdentifierInfo *fn, llvm::Type* ret_type,
                 *old_type = fn->type;
             return false;
         }
-        if ( fn->type ) /* redeclaration with the same type */
-            return true;
+        /* redeclaration with the same type */
+        return true;
     }
 
     /* new declaration */
