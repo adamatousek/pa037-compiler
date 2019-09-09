@@ -5,10 +5,10 @@
 
 namespace seagol {
 
-const Value::Category Value::LVALUE = { 1, 0, 1, 0 };
-const Value::Category Value::RVALUE = { 0, 0, 0, 0 };
-const Value::Category Value::CVALUE = { 0, 1, 0, 0 };
-const Value::Category Value::FVALUE = { 1, 0, 0, 1 };
+const Value::Category Value::LVALUE = { 1, 0, 1 };
+const Value::Category Value::RVALUE = { 0, 0, 0 };
+const Value::Category Value::CVALUE = { 0, 1, 0 };
+const Value::Category Value::FVALUE = { 1, 0, 0 };
 
 llvm::Type* Context::get_type( typeid_t id )
 {
@@ -64,16 +64,14 @@ bool Context::coercible( llvm::Type *from, llvm::Type *to )
     return false;
 }
 
-ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to, bool rvalise )
+ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to )
 {
     if ( !to )
         to = expr.type();
 
-    if ( rvalise && expr.loadable() ) {
+    if ( expr.loadable() ) {
         expr.rvalise();
         expr.llval = irb.CreateLoad( expr.llval );
-        if ( to->isPointerTy() && to->getPointerElementType()->isFunctionTy() )
-            expr.cat.callable = true;
     }
 
     auto *from = expr.type();
@@ -93,10 +91,29 @@ ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to, bool rvalise )
         }
         expr.rvalise();
     }
-    if ( from->isFunctionTy() && to->isPointerTy() &&
-            to->getPointerElementType() == from ) {
-        expr.cat.callable = 1;
-    }
+    return expr;
+}
+
+bool Context::castable( llvm::Type *from, llvm::Type *to )
+{
+    if ( coercible( from, to ) )
+        return true;
+    if ( from->isIntOrPtrTy() && to->isIntOrPtrTy() )
+        return true;
+    return false;
+}
+
+ExprInfo Context::cast( ExprInfo expr, llvm::Type * to )
+{
+    auto *from = expr.type();
+    if ( coercible( from, to ) )
+        return coerce( expr, to );
+
+    expr.rvalise();
+
+    if ( from->isIntOrPtrTy() && to->isIntOrPtrTy() )
+        expr.llval = irb.CreateBitOrPointerCast( expr.llval, to );
+
     return expr;
 }
 

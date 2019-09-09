@@ -455,7 +455,15 @@ aexpr
 
 cast_expr
     : unary_expr
-    | '(' type ')' cast_expr { NOT_IMPLEMENTED(@$) }
+    | '(' complete_type[to_type] ')' cast_expr[from_ex] {
+        auto *from_type = $from_ex.type();
+        if ( ! ctx.castable( from_type, $to_type ) ) {
+            error( @$, "invalid cast from `"s + pt( from_type ) +
+                    "\' to `" + pt( $to_type ) + '\'' );
+        } else {
+            $$ = ctx.cast( $from_ex, $to_type );
+        }
+    }
     ;
 
 unary_expr
@@ -486,9 +494,6 @@ unary_expr
                 $$ = $2;
                 $$.cat = seagol::Value::LVALUE;
             }
-            if ( $$.type()->isPointerTy() &&
-                    $$.type()->getPointerElementType()->isFunctionTy() )
-                $$.cat.callable = true;
         }
     }
     ;
@@ -558,9 +563,6 @@ primary_expr
             $$.cat = seagol::Value::FVALUE;
         } else {
             $$.cat = seagol::Value::LVALUE;
-            if ( $1->type->isPointerTy() &&
-                    $1->type->getPointerElementType()->isFunctionTy() )
-                $$.cat.callable = true;
         }
     }
     | CONSTANT_I {

@@ -78,14 +78,17 @@ struct Value {
         uint8_t addressable : 1; // If 1, then then llval is the address
         uint8_t constant    : 1;
         uint8_t assignable  : 1;
-        uint8_t callable    : 1;
     } cat;
     bool addressable() const { return cat.addressable; }
     bool loadable() const { return cat.addressable && cat.assignable; }
     bool constant() const { return cat.constant; }
     bool assignable() const { return cat.assignable; }
-    bool callable() const { return cat.callable; }
-    bool derefable() const { return pointer() || cat.callable; }
+    bool callable() const {
+        return llvm::isa< llvm::Function >( llval ) ||
+                ( type()->isPointerTy() &&
+                  type()->getPointerElementType()->isFunctionTy() );
+    }
+    bool derefable() const { return pointer() || callable(); }
     bool pointer() const { return type()->isPointerTy(); }
     void setCategory( Category category ) { cat = category; }
 

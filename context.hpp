@@ -32,7 +32,9 @@ struct Context {
 
     llvm::Type* get_type( typeid_t );
     bool coercible( llvm::Type *, llvm::Type * );
-    ExprInfo coerce( ExprInfo, llvm::Type * t = nullptr, bool rvalise = true );
+    ExprInfo coerce( ExprInfo, llvm::Type * t = nullptr );
+    bool castable( llvm::Type *, llvm::Type * );
+    ExprInfo cast( ExprInfo, llvm::Type * );
     bool promotable( ExprInfo, ExprInfo );
     std::pair< ExprInfo, ExprInfo > promote( ExprInfo, ExprInfo );
     std::string format_type( llvm::Type* ) const;

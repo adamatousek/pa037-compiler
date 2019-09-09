@@ -34,3 +34,11 @@ int fptr2() {
     f = add;
     return f(5, f(4, 6));
 }
+
+void cast( long a ) {
+    int x = 42;
+    long y = (char) a;
+    long *py = &y;
+    *(char *) py = 20;
+    ((void(*)(int)) &fptr2)( 42 );
+}
