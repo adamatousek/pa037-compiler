@@ -21,7 +21,9 @@ struct TYPEID {
     enum : typeid_t {
         UNKNOWN = 0,
         VOID,
+        LONG,
         INT,
+        SHORT,
         CHAR,
         BOOL,
         _last_
@@ -79,10 +81,12 @@ struct Value {
         uint8_t callable    : 1;
     } cat;
     bool addressable() const { return cat.addressable; }
-    bool loadable() const { return cat.addressable & !cat.callable; }
+    bool loadable() const { return cat.addressable && cat.assignable; }
     bool constant() const { return cat.constant; }
     bool assignable() const { return cat.assignable; }
     bool callable() const { return cat.callable; }
+    bool derefable() const { return pointer() || cat.callable; }
+    bool pointer() const { return type()->isPointerTy(); }
     void setCategory( Category category ) { cat = category; }
 
     llvm::Type* type() const {
@@ -100,6 +104,10 @@ struct Value {
         return ! llvm::cast< llvm::Constant >( llval )->isZeroValue();
     }
 
+    Value() = default;
+    DEFAULT_DTOR_COPY_MOVE( Value )
+    Value( llvm::Value * v, Category c ) : llval( v ), cat( c ) {}
+
     static const Category LVALUE;
     static const Category RVALUE;
     static const Category CVALUE;
@@ -111,7 +119,8 @@ using ExprInfo = Value;
 struct CallInfo {
     llvm::FunctionType::param_iterator param_it;
     llvm::FunctionType::param_iterator param_end;
-    llvm::Function* fn;
+    llvm::Value *fn;
+    llvm::FunctionType *ftype;
     std::vector<llvm::Value*> args;
 };
 using CallInfo_u = std::unique_ptr< CallInfo >;

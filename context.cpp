@@ -1,4 +1,7 @@
 #include "context.hpp"
+#include "parser.hpp"
+
+#include <llvm/IR/CFG.h>
 
 namespace seagol {
 
@@ -12,7 +15,9 @@ llvm::Type* Context::get_type( typeid_t id )
     switch ( id ) {
     case TYPEID::UNKNOWN: return nullptr;
     case TYPEID::VOID:    return llvm::Type::getVoidTy( llcontext );
+    case TYPEID::LONG:    return llvm::Type::getInt64Ty( llcontext );
     case TYPEID::INT:     return llvm::Type::getInt32Ty( llcontext );
+    case TYPEID::SHORT:   return llvm::Type::getInt16Ty( llcontext );
     case TYPEID::CHAR:    return llvm::Type::getInt8Ty( llcontext );
     case TYPEID::BOOL:    return llvm::Type::getInt1Ty( llcontext );
     }
@@ -28,7 +33,7 @@ std::string Context::format_type( llvm::Type *ty ) const
     if ( ty->isIntegerTy( 8 ) ) return "char";
     if ( ty->isIntegerTy( 1 ) ) return "bool";
     if ( auto *pty = llvm::dyn_cast< llvm::PointerType >( ty ) ) {
-        return "<*>";
+        return format_type( pty->getElementType() ) + " *";
     }
     if ( auto *fty = llvm::dyn_cast< llvm::FunctionType >( ty ) ) {
         std::string s = format_type( fty->getReturnType() ) + "(*)(";
@@ -53,14 +58,22 @@ bool Context::coercible( llvm::Type *from, llvm::Type *to )
         return false;
     if ( from->isIntegerTy() && to->isIntegerTy() )
         return true;
+    if ( from->isFunctionTy() && to->isPointerTy() &&
+            to->getPointerElementType() == from )
+        return true;
     return false;
 }
 
 ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to, bool rvalise )
 {
+    if ( !to )
+        to = expr.type();
+
     if ( rvalise && expr.loadable() ) {
         expr.rvalise();
         expr.llval = irb.CreateLoad( expr.llval );
+        if ( to->isPointerTy() && to->getPointerElementType()->isFunctionTy() )
+            expr.cat.callable = true;
     }
 
     auto *from = expr.type();
@@ -80,7 +93,24 @@ ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to, bool rvalise )
         }
         expr.rvalise();
     }
+    if ( from->isFunctionTy() && to->isPointerTy() &&
+            to->getPointerElementType() == from ) {
+        expr.cat.callable = 1;
+    }
     return expr;
+}
+
+bool Context::promotable( ExprInfo l, ExprInfo r )
+{
+    return l.type()->isIntegerTy() && r.type()->isIntegerTy();
+}
+
+std::pair< ExprInfo, ExprInfo > Context::promote( ExprInfo l, ExprInfo r )
+{
+    unsigned width = std::max( l.type()->getIntegerBitWidth(),
+                               r.type()->getIntegerBitWidth() );
+    return { coerce( l, irb.getIntNTy( width ) ),
+             coerce( r, irb.getIntNTy( width ) )};
 }
 
 void Context::open_scope()
@@ -176,9 +206,18 @@ void Context::start_fun( IdentifierInfo *fii, const ArgumentList & args )
     bb_trash->insertInto( fn );
 }
 
-void Context::end_fun()
+bool Context::end_fun()
 {
+    auto bb_this = irb.GetInsertBlock();
+    if ( bb_this != bb_trash &&
+            std::all_of( llvm::pred_begin( bb_this ), llvm::pred_end( bb_this ),
+                      [this]( auto *bb ){ return bb == bb_trash; } ) )
+            bb_this->removeFromParent();
+    else if ( bb_this != bb_trash )
+        return false;
+
     bb_trash->removeFromParent();
+    return true;
 }
 
 void Context::after_return()
@@ -190,7 +229,7 @@ std::string Context::push_param( CallInfo* ci, const ExprInfo &arg )
 {
     if ( ci->param_it == ci->param_end )
         return std::string( "too many arguments (function requires " ) +
-            std::to_string( ci->fn->arg_size() ) + ')';
+            std::to_string( ci->ftype->getNumParams() ) + ')';
     if ( !coercible( arg.type(), *ci->param_it ) )
         return std::string( "invalid conversion from `" ) +
             format_type( arg.type() ) + "\' to `" + format_type( *ci->param_it )
@@ -209,19 +248,77 @@ ExprInfo Context::mk_bin( const ExprInfo &l, const ExprInfo &r,
     res.llval = val;
     return res;
 }
-ExprInfo Context::mk_arith( const ExprInfo &l, const ExprInfo &r,
+ExprInfo Context::mk_arith( yy::parser *p, const yy::location &loc,
+                            ExprInfo l, ExprInfo r,
                             llvm::Instruction::BinaryOps op )
 {
-    return mk_bin( l, r, irb.CreateBinOp( op, l.llval, r.llval ) );
+    /* Both are integers */
+    if ( promotable( l, r ) ) {
+        auto ops = promote( l, r );
+        return mk_bin( ops.first, ops.second,
+                       irb.CreateBinOp( op, ops.first.llval, ops.second.llval ) );
+    }
+    /* Both are pointers - only subtraction for equal types is defined */
+    if ( l.pointer() && r.pointer()
+            && op == llvm::Instruction::Sub
+            && l.type() == l.type() ) {
+        l = coerce( l );
+        r = coerce( r );
+        auto lp = irb.CreatePtrToInt( l.llval, irb.getInt64Ty() );
+        auto rp = irb.CreatePtrToInt( r.llval, irb.getInt64Ty() );
+        return { irb.CreateBinOp( op, lp, rp ), Value::RVALUE };
+    }
+    /* Left is pointer, right is integer - pointer arithmetic */
+    if ( l.pointer() && ! r.pointer()
+            && ( op == llvm::Instruction::Add || op == llvm::Instruction::Sub )
+            && coercible( r.type(), irb.getInt64Ty() ) ) {
+        auto ri = coerce( r, irb.getInt64Ty() );
+        if ( op == llvm::Instruction::Sub )
+        {
+            ri.llval = irb.CreateNeg( ri.llval );
+            ri.rvalise();
+        }
+        l = coerce( l );
+        auto p = irb.CreateGEP( l.llval, ri.llval );
+        return { p, Value::RVALUE };
+    }
+    /* Left is integer, right is pointer - pointer arithmetic (addition only) */
+    if ( !l.pointer() && r.pointer()
+            && op == llvm::Instruction::Add
+            && coercible( l.type(), irb.getInt64Ty() ) ) {
+        auto li = coerce( l, irb.getInt64Ty() );
+        r = coerce( r );
+        auto p = irb.CreateGEP( r.llval, li.llval );
+        return { p, Value::RVALUE };
+    }
+
+    /* Else: error */
+    return p->error( loc, "invalid operand types: `"
+                          + format_type( l.type() ) + "' and `"
+                          + format_type( r.type() ) + "'" ), l;
 }
 
-ExprInfo Context::mk_cmp( const ExprInfo &l, const ExprInfo &r,
-                          llvm::CmpInst::Predicate p )
+ExprInfo Context::mk_cmp( yy::parser *p, const yy::location &loc,
+                          ExprInfo l, ExprInfo r, llvm::CmpInst::Predicate pred )
 {
+    if ( promotable( l, r ) ) {
+        auto ops = promote( l, r );
+        l = ops.first;
+        r = ops.second;
+    } else if ( l.pointer() && r.pointer() ) {
+        l = coerce( l );
+        r = coerce( r );
+        l.llval = irb.CreatePtrToInt( l.llval, irb.getInt64Ty() );
+        r.llval = irb.CreatePtrToInt( r.llval, irb.getInt64Ty() );
+    } else {
+        return p->error( loc, "invalid operand types: `"
+                              + format_type( l.type() ) + "' and `"
+                              + format_type( r.type() ) + "'" ), l;
+    }
     ExprInfo res;
     res.cat = ExprInfo::RVALUE;
     res.cat.constant = l.constant() && r.constant();
-    res.llval = irb.CreateICmp( p, l.llval, r.llval );
+    res.llval = irb.CreateICmp( pred, l.llval, r.llval );
     return res;
 }
 

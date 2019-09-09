@@ -35,9 +35,9 @@ int main( int argc, char **argv )
 
 namespace llvm {
 void Value::dump() const {
-    this->print( llvm::outs(), true );
+    this->print( llvm::outs(), false );
 }
 void Type::dump() const {
-    this->print( llvm::outs(), true );
+    this->print( llvm::outs(), false );
 }
 } /* llvm */

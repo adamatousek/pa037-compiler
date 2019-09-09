@@ -11,6 +11,11 @@ SEAGOL_UNRELAX_WARNINGS
 
 #include "semantic.hpp"
 
+namespace yy {
+    class parser;
+    class location;
+}
+
 namespace seagol {
 
 struct ScopeInfo {
@@ -27,7 +32,9 @@ struct Context {
 
     llvm::Type* get_type( typeid_t );
     bool coercible( llvm::Type *, llvm::Type * );
-    ExprInfo coerce( ExprInfo, llvm::Type *, bool rvalise = true );
+    ExprInfo coerce( ExprInfo, llvm::Type * t = nullptr, bool rvalise = true );
+    bool promotable( ExprInfo, ExprInfo );
+    std::pair< ExprInfo, ExprInfo > promote( ExprInfo, ExprInfo );
     std::string format_type( llvm::Type* ) const;
 
     void open_scope();
@@ -40,16 +47,16 @@ struct Context {
     bool /*TODO*/ decl_fun( IdentifierInfo*, llvm::Type*, const ArgumentList &,
                             llvm::Type** );
     void start_fun( IdentifierInfo*, const ArgumentList & );
-    void end_fun();
+    bool end_fun(); /* whether a return instruction is present */
     void after_return();
 
     std::string push_param( CallInfo*, const ExprInfo & );
 
     ExprInfo mk_bin( const ExprInfo &, const ExprInfo &, llvm::Value* );
-    ExprInfo mk_arith( const ExprInfo &, const ExprInfo &,
-                       llvm::Instruction::BinaryOps );
-    ExprInfo mk_cmp( const ExprInfo &, const ExprInfo &,
-                     llvm::CmpInst::Predicate );
+    ExprInfo mk_arith( yy::parser *, const yy::location &,
+                       ExprInfo, ExprInfo, llvm::Instruction::BinaryOps );
+    ExprInfo mk_cmp( yy::parser *, const yy::location &,
+                     ExprInfo, ExprInfo, llvm::CmpInst::Predicate );
 
     llvm::BasicBlock* mk_bb( const llvm::Twine &name = "" );
 

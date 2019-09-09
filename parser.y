@@ -87,6 +87,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <llvm::Type*> returnable_type
 %type <llvm::Type*> _bool
 %type <llvm::Type*> _i64
+%type <std::vector<llvm::Type*>> type_list
 
 %type <seagol::IdentifierInfo*> toplevel_identifier
 %type <seagol::IdentifierInfo*> fresh_identifier
@@ -106,7 +107,6 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <seagol::ExprInfo> conditional_expr
 %type <seagol::ExprInfo> expr
 %type <seagol::ExprInfo> bexpr
-%type <seagol::ExprInfo> arith_expr
 %type <seagol::ExprInfo> aexpr
 %type <seagol::ExprInfo> cast_expr
 %type <seagol::ExprInfo> unary_expr
@@ -149,6 +149,18 @@ _lvalue: %empty {
                 error( @0, "expecting an lvalue" );
         } ;
 
+/* Usage in rules: <ExprInfo> _addressable */
+_addressable: %empty {
+            if ( ! $<seagol::ExprInfo>0.addressable() )
+                error( @0, "cannot take expression's address" );
+        } ;
+
+/* Usage in rules: <ExprInfo> _isptr */
+_isptr: %empty {
+            if ( ! $<seagol::ExprInfo>0.derefable() )
+                error( @0, "expression is not of pointer type" );
+        } ;
+
 toplevel
     : toplevel_entry_list END_OF_FILE
     ;
@@ -176,7 +188,14 @@ toplevel_entry
             error( @fii, "`"s + $fii->name + "\' was already defined" );
         ctx.start_fun( $fii, $args );
     }
-      block_stmt _close { ctx.end_fun(); }
+      block_stmt _close[end] {
+          if ( $rt->isVoidTy() && IRB.GetInsertBlock() != ctx.bb_trash ) {
+              IRB.CreateRetVoid();
+              ctx.after_return();
+          }
+          if ( !ctx.end_fun() )
+              error( @end, "control reaches end of non-void function" );
+    }
     /* global variable declaration */
     | returnable_type[ty] toplevel_identifier[vii] ';' {
         /* using complete_type introduces a shift/reduce conflict */
@@ -224,6 +243,21 @@ type
         { if ( !($$ = ctx.get_type( $1.tid )))
             error( @1, "`"s + $1.name + "\' does not name a type" );
         }
+    | type '*'
+        { if ( $1->isVoidTy() )
+              $$ = IRB.getInt8PtrTy();
+          else
+              $$ = $1->getPointerTo();
+        }
+    | returnable_type '(' '*' ')' '(' ')'
+        { $$ = llvm::FunctionType::get( $1, false)->getPointerTo(); }
+    | returnable_type '(' '*' ')' '(' type_list[args] ')'
+        { $$ = llvm::FunctionType::get( $1, $args, false)->getPointerTo(); }
+    ;
+
+type_list
+    : complete_type { $$.push_back( $1 ); }
+    | type_list ',' complete_type { $$ = std::move( $1 ); $$.push_back( $3 ); }
     ;
 
 returnable_type /* complete or void */
@@ -292,7 +326,7 @@ statement
     ;
 
 declaration
-    : type fresh_identifier {
+    : complete_type fresh_identifier {
         $$ = $2;
         $$->type = $1;
         $$->llval = IRB.CreateAlloca( $$->type, nullptr, $$->name + ".addr" );
@@ -372,9 +406,8 @@ conditional_expr
     }
     ;
 
-/* TODO: constexpr folding */
 expr
-    : arith_expr
+    : aexpr
     | bexpr[l] L_OR <seagol::IfInfo>{
         auto *bb_this = IRB.GetInsertBlock();
         auto *bb_post = ctx.mk_bb( "or.post" );
@@ -411,27 +444,25 @@ expr
 
 bexpr: expr _bool _coerce[res] { $$ = $res; } ;
 
-arith_expr
+aexpr
     : cast_expr
-    | aexpr  '+' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Add ); }
-    | aexpr  '-' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Sub ); }
-    | aexpr  '*' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Mul ); }
-    | aexpr  '/' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::SDiv); }
-    | aexpr  '%' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::SRem); }
-    | aexpr  '|' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Or  ); }
-    | aexpr  '^' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Xor ); }
-    | aexpr  '&' aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::And ); }
-    | aexpr  SHL aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::Shl ); }
-    | aexpr ASHR aexpr { $$ = ctx.mk_arith( $1, $3, llvm::Instruction::AShr); }
-    | aexpr   EQ aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_EQ ); }
-    | aexpr  NEQ aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_NE ); }
-    | aexpr  GEQ aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_SGE ); }
-    | aexpr  LEQ aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_SLE ); }
-    | aexpr  '>' aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_SGT ); }
-    | aexpr  '<' aexpr { $$ = ctx.mk_cmp( $1, $3, llvm::CmpInst::ICMP_SLT ); }
+    | aexpr  '+' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Add ); }
+    | aexpr  '-' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Sub ); }
+    | aexpr  '*' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Mul ); }
+    | aexpr  '/' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::SDiv); }
+    | aexpr  '%' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::SRem); }
+    | aexpr  '|' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Or  ); }
+    | aexpr  '^' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Xor ); }
+    | aexpr  '&' aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::And ); }
+    | aexpr  SHL aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::Shl ); }
+    | aexpr ASHR aexpr { $$ = ctx.mk_arith( this, @$, $1, $3, llvm::Instruction::AShr); }
+    | aexpr   EQ aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_EQ ); }
+    | aexpr  NEQ aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_NE ); }
+    | aexpr  GEQ aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_SGE ); }
+    | aexpr  LEQ aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_SLE ); }
+    | aexpr  '>' aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_SGT ); }
+    | aexpr  '<' aexpr { $$ = ctx.mk_cmp( this, @$, $1, $3, llvm::CmpInst::ICMP_SLT ); }
     ;
-
-aexpr: arith_expr _i64 _coerce[res] { $$ = $res; } ; /* TODO: actual integer promotion */
 
 cast_expr
     : unary_expr
@@ -450,6 +481,26 @@ unary_expr
     | '!' cast_expr _bool _coerce[res] {
         $$ = $res;
         $$.llval = IRB.CreateNot( $res.llval );
+    }
+    | '&' cast_expr _addressable {
+        $$ = $2;
+        $$.rvalise();
+    }
+    | '*' cast_expr _isptr {
+        if ( llvm::isa< llvm::Function >( $2.llval ) )
+            $$ = $2;
+        else {
+            if ( $2.addressable() ) {
+                $$.llval = IRB.CreateLoad( $2.llval );
+                $$.cat = seagol::Value::LVALUE;
+            } else {
+                $$ = $2;
+                $$.cat = seagol::Value::LVALUE;
+            }
+            if ( $$.type()->isPointerTy() &&
+                    $$.type()->getPointerElementType()->isFunctionTy() )
+                $$.cat.callable = true;
+        }
     }
     ;
 
@@ -478,11 +529,20 @@ arg : expression ;
 
 _fn : %empty {
           auto fn_expr = $<seagol::ExprInfo>-1;
-          if ( auto *fn = llvm::dyn_cast< llvm::Function >( fn_expr.llval ) ) {
+          if ( fn_expr.callable() ) {
+              fn_expr = ctx.coerce( fn_expr );
               $$.reset( new seagol::CallInfo{} );
-              $$->fn = fn;
-              $$->param_it = fn->getFunctionType()->param_begin();
-              $$->param_end = fn->getFunctionType()->param_end();
+              $$->fn = fn_expr.llval;
+              auto ftype = llvm::dyn_cast< llvm::FunctionType >( $$->fn->getType() );
+              if ( !ftype ) {
+                  assert( $$->fn->getType()->isPointerTy() );
+                  ftype = llvm::dyn_cast< llvm::FunctionType >(
+                        $$->fn->getType()->getPointerElementType() );
+                  assert( ftype );
+              }
+              $$->param_it = ftype->param_begin();
+              $$->param_end = ftype->param_end();
+              $$->ftype = ftype;
           } else {
               error( @0, "cannot call to a non-callable value" );
           }
@@ -490,11 +550,11 @@ _fn : %empty {
 
 _mkcall : %empty {
               auto *ci = $<seagol::CallInfo*>-1;
-              unsigned argc_req = ci->fn->arg_size();
+              unsigned argc_req = ci->ftype->getNumParams();
               unsigned argc = ci->args.size();
               if ( argc < argc_req )
                   error( @0, "too few arguments for call to type `"s +
-                          pt( ci->fn->getType() ) + "\': requested " +
+                          pt( ci->ftype ) + "\': requested " +
                           std::to_string( argc_req ) + ", but only " +
                           std::to_string( argc ) + " provided" );
               $$.cat = seagol::Value::RVALUE;
@@ -509,6 +569,9 @@ primary_expr
             $$.cat = seagol::Value::FVALUE;
         } else {
             $$.cat = seagol::Value::LVALUE;
+            if ( $1->type->isPointerTy() &&
+                    $1->type->getPointerElementType()->isFunctionTy() )
+                $$.cat.callable = true;
         }
     }
     | CONSTANT_I {
