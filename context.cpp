@@ -140,6 +140,11 @@ void Context::close_scope()
     scope_stack.pop_back();
 }
 
+bool Context::in_global_scope() const
+{
+    return scope_stack.size() == 1;
+}
+
 IdentifierInfo* Context::find_id( const std::string &ident )
 {
     auto scope_it = scope_stack.rbegin();

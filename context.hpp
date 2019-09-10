@@ -41,6 +41,7 @@ struct Context {
 
     void open_scope();
     void close_scope();
+    bool in_global_scope() const;
     IdentifierInfo* find_id( const std::string & );
     IdentifierInfo* decl_id( const std::string & );
     IdentifierInfo* gen_id( const std::string & );

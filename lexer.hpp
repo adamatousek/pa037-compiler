@@ -47,6 +47,18 @@ struct Lexer : yyFlexLexer {
         _error( "unknown escape sequence" );
     }
 
+    std::string unescape( const char *begin, const char *end )
+    {
+        std::string str;
+        while ( begin < end ) {
+            str += unescape( begin );
+            if ( *begin == '\\' )
+                ++begin;
+            ++begin;
+        }
+        return str;
+    }
+
     auto make_identifier_or_type( const char *iden )
     {
         // TODO: ask the driver whether the identifier names a type

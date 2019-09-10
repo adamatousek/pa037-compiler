@@ -58,6 +58,8 @@ ES      (\\[ntabvfr'"\\\\?])
 \'([^'\\\n]|{ES})\'     return p::make_CONSTANT_I( {8, unescape( yytext + 1 )}, l );
 true                    return p::make_CONSTANT_I( {1, 1}, l );
 false                   return p::make_CONSTANT_I( {1, 0}, l );
+\"([^\"\\\n]|{ES})*\"   return p::make_CONSTANT_S( unescape( yytext + 1, yytext + yyleng - 1 ), l );
+
 void                    return p::make_TYPE_NAME( {TYPEID::VOID, yytext}, l);
 long                    return p::make_TYPE_NAME( {TYPEID::LONG, yytext}, l);
 int                     return p::make_TYPE_NAME( {TYPEID::INT, yytext}, l);

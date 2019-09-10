@@ -48,6 +48,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token <std::string> IDENTIFIER "identifier"
 %token <seagol::TypeName> TYPE_NAME "type name"
 %token <seagol::ConstantInt> CONSTANT_I "integral constant"
+%token <std::string> CONSTANT_S "string constant"
 
 %token RETURN "return"
 %token IF "if"
@@ -502,6 +503,14 @@ postfix_expr
     : primary_expr
     | postfix_expr '(' _fn <seagol::CallInfo*>{ $$ = $3.get(); } ')' _mkcall[c] { $$ = $c; }
     | postfix_expr '(' _fn arg_list ')' _mkcall[c] { $$ = $c; }
+    | postfix_expr[l] '[' expr[r] ']' {
+        $$ = ctx.mk_arith( this, @$, $l, $r, llvm::Instruction::Add );
+        if ( ! $$.pointer() )
+            error( @$, "invalid operand types `" + pt( $l.type() ) + "' and `"
+                        + pt( $r.type() ) + "'" );
+        assert( ! $$.addressable() );
+        $$.cat = seagol::Value::LVALUE;
+    }
     ;
 
 arg_list
@@ -567,6 +576,14 @@ primary_expr
     }
     | CONSTANT_I {
         $$.llval = IRB.getIntN( $1.width, $1.number );
+        $$.cat = seagol::Value::CVALUE;
+    }
+    | CONSTANT_S {
+        if ( ctx.in_global_scope() ) {
+            error( @$, "no support for global strings yet" );
+        } else {
+            $$.llval = IRB.CreateGlobalStringPtr( $1 );
+        }
         $$.cat = seagol::Value::CVALUE;
     }
     | '(' expression ')' { $$ = $2; }
