@@ -28,6 +28,7 @@ struct Context {
     std::vector< ScopeInfo > scope_stack;
     llvm::IRBuilder<> irb;
     llvm::BasicBlock* bb_trash;
+    llvm::Type* anyptr_ty;
     uint16_t seed = 0;
 
     llvm::Type* get_type( typeid_t );
@@ -65,12 +66,15 @@ struct Context {
 
     llvm::BasicBlock* mk_bb( const llvm::Twine &name = "" );
 
+    void init();
+
     Context( const std::string & name )
         : llmodule( new llvm::Module( name, llcontext ) )
         , irb( llcontext )
         , bb_trash( llvm::BasicBlock::Create( llcontext, "trash" ) )
     {
         open_scope(); // top-level (global) scope
+        init();
     }
 };
 

@@ -26,6 +26,7 @@ struct TYPEID {
         SHORT,
         CHAR,
         BOOL,
+        ANYPTR,
         _last_
     };
 };

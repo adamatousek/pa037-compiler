@@ -49,6 +49,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token <seagol::TypeName> TYPE_NAME "type name"
 %token <seagol::ConstantInt> CONSTANT_I "integral constant"
 %token <std::string> CONSTANT_S "string constant"
+%token NULLPTR "NULL"
 
 %token RETURN "return"
 %token IF "if"
@@ -261,7 +262,7 @@ type
         }
     | type '*'
         { if ( $1->isVoidTy() )
-              $$ = IRB.getInt8PtrTy();
+              $$ = ctx.anyptr_ty;
           else
               $$ = $1->getPointerTo();
         }
@@ -573,6 +574,10 @@ primary_expr
         } else {
             $$.cat = seagol::Value::LVALUE;
         }
+    }
+    | NULLPTR {
+        $$.llval = llvm::Constant::getNullValue( ctx.anyptr_ty );
+        $$.cat = seagol::Value::CVALUE;
     }
     | CONSTANT_I {
         $$.llval = IRB.getIntN( $1.width, $1.number );

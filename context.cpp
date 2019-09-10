@@ -20,12 +20,14 @@ llvm::Type* Context::get_type( typeid_t id )
     case TYPEID::SHORT:   return llvm::Type::getInt16Ty( llcontext );
     case TYPEID::CHAR:    return llvm::Type::getInt8Ty( llcontext );
     case TYPEID::BOOL:    return llvm::Type::getInt1Ty( llcontext );
+    case TYPEID::ANYPTR:  return anyptr_ty;
     }
     throw std::runtime_error( "requesting nonexistent type" );
 }
 
 std::string Context::format_type( llvm::Type *ty ) const
 {
+    if ( ty == anyptr_ty ) return "void *";
     if ( ty->isVoidTy() ) return "void";
     if ( ty->isIntegerTy( 32 ) ) return "int";
     if ( ty->isIntegerTy( 64 ) ) return "long";
@@ -61,6 +63,12 @@ bool Context::coercible( llvm::Type *from, llvm::Type *to )
     if ( from->isFunctionTy() && to->isPointerTy() &&
             to->getPointerElementType() == from )
         return true;
+    if ( from->isPointerTy() && to == anyptr_ty )
+        return true;
+    if ( from == anyptr_ty && to->isPointerTy() )
+        return true;
+    if ( from == anyptr_ty && to->isIntegerTy() )
+        return true;
     return false;
 }
 
@@ -89,8 +97,17 @@ ExprInfo Context::coerce( ExprInfo expr, llvm::Type *to )
             }
             expr.llval = irb.CreateSExtOrTrunc( expr.llval, to );
         }
-        expr.rvalise();
     }
+    else if ( from == anyptr_ty ) {
+        expr.llval = irb.CreateExtractValue( expr.llval, 0 );
+        expr.llval = irb.CreateBitOrPointerCast( expr.llval, to );
+    } else if ( to == anyptr_ty ) {
+        expr.llval = irb.CreateBitOrPointerCast( expr.llval,
+                llvm::cast< llvm::StructType >( to )->getElementType( 0 ) );
+        expr.llval = irb.CreateInsertValue( llvm::UndefValue::get( to ), expr.llval, 0 );
+    }
+
+    expr.rvalise();
     return expr;
 }
 
@@ -373,6 +390,11 @@ llvm::BasicBlock* Context::mk_bb( const llvm::Twine &name )
     auto *bb_next = fn->getBasicBlockList().getNextNode( *bb_this );
     auto *bb = llvm::BasicBlock::Create( llcontext, name, fn, bb_next );
     return bb;
+}
+
+void Context::init()
+{
+    anyptr_ty = llvm::StructType::create( { llvm::Type::getInt64Ty( llcontext ) }, "any-ptr" );
 }
 
 } /* seagol */

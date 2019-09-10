@@ -42,3 +42,10 @@ void cast( long a ) {
     *(char *) py = 20;
     ((void(*)(int)) &fptr2)( 42 );
 }
+
+void nullpointer() {
+    int * x = NULL;
+}
+
+void * untype( int * ptr ) { return ptr; }
+int * type( void * ptr ) { return ptr; }
