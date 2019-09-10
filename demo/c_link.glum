@@ -1,0 +1,30 @@
+// vim: ft=c fdm=marker
+
+/*****************************************************
+ *        S T A N D A R D   C   L I B R A R Y      {{{
+ *****************************************************/
+typedef void FILE; /* until at least forward declared structs are a thing */
+
+FILE * stdin;
+FILE * stdout;
+
+int puts( char * );
+int putchar( int );
+
+long getline( char **, long *, FILE * );
+
+void * malloc( long );
+void free( void * );
+
+/*********************************************** }}} */
+
+int main()
+{
+    puts( "Hullo, my precious!\nWhat is thy name?" );
+    char *line = NULL;
+    long bufl = 0;
+    long len = getline( &line, &bufl, stdin );
+    puts( line );
+    free( line );
+    return 0;
+}

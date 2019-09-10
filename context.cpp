@@ -10,20 +10,19 @@ const Value::Category Value::RVALUE = { 0, 0, 0 };
 const Value::Category Value::CVALUE = { 0, 1, 0 };
 const Value::Category Value::FVALUE = { 1, 0, 0 };
 
-llvm::Type* Context::get_type( typeid_t id )
+llvm::Type* Context::find_type( const std::string &tname )
 {
-    switch ( id ) {
-    case TYPEID::UNKNOWN: return nullptr;
-    case TYPEID::VOID:    return llvm::Type::getVoidTy( llcontext );
-    case TYPEID::LONG:    return llvm::Type::getInt64Ty( llcontext );
-    case TYPEID::INT:     return llvm::Type::getInt32Ty( llcontext );
-    case TYPEID::SHORT:   return llvm::Type::getInt16Ty( llcontext );
-    case TYPEID::CHAR:    return llvm::Type::getInt8Ty( llcontext );
-    case TYPEID::BOOL:    return llvm::Type::getInt1Ty( llcontext );
-    case TYPEID::ANYPTR:  return anyptr_ty;
-    }
-    throw std::runtime_error( "requesting nonexistent type" );
+    auto it = type_names.find( tname );
+    if ( it == type_names.end() )
+        return nullptr;
+    return it->second;
 }
+
+void Context::decl_type( const std::string &tname, llvm::Type *ty )
+{
+    type_names.insert({ tname, ty });
+}
+
 
 std::string Context::format_type( llvm::Type *ty ) const
 {
@@ -176,6 +175,8 @@ IdentifierInfo* Context::find_id( const std::string &ident )
 
 IdentifierInfo* Context::decl_id( const std::string &ident )
 {
+    if ( find_type( ident ) )
+        return nullptr; /* names a type */
     auto id_it = scope_stack.back().ids.find( ident );
     if ( id_it != scope_stack.back().ids.end() )
         return nullptr; /* already declared in this scope */
@@ -394,7 +395,15 @@ llvm::BasicBlock* Context::mk_bb( const llvm::Twine &name )
 
 void Context::init()
 {
+    /* Built-in types */
     anyptr_ty = llvm::StructType::create( { llvm::Type::getInt64Ty( llcontext ) }, "any-ptr" );
+    decl_type( "void", llvm::Type::getVoidTy( llcontext ) );
+    decl_type( "long", llvm::Type::getInt64Ty( llcontext ) );
+    decl_type( "int", llvm::Type::getInt32Ty( llcontext ) );
+    decl_type( "short", llvm::Type::getInt16Ty( llcontext ) );
+    decl_type( "char", llvm::Type::getInt8Ty( llcontext ) );
+    decl_type( "bool", llvm::Type::getInt1Ty( llcontext ) );
+
 }
 
 } /* seagol */

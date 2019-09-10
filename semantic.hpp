@@ -36,11 +36,6 @@ struct TYPEID {
  * Semantic types for parser
  */
 
-struct TypeName {
-    typeid_t tid = 0;
-    std::string name;
-};
-
 struct IdentifierInfo {
     const std::string name; // sort key in sets, therefore must not be modified
     llvm::Value *llval = nullptr;

@@ -26,12 +26,15 @@ struct Context {
     llvm::LLVMContext llcontext;
     std::unique_ptr< llvm::Module > llmodule;
     std::vector< ScopeInfo > scope_stack;
+    std::map< std::string, llvm::Type* > type_names;
     llvm::IRBuilder<> irb;
     llvm::BasicBlock* bb_trash;
     llvm::Type* anyptr_ty;
     uint16_t seed = 0;
 
-    llvm::Type* get_type( typeid_t );
+    llvm::Type* find_type( const std::string & );
+    void decl_type( const std::string &, llvm::Type * );
+
     bool coercible( llvm::Type *, llvm::Type * );
     ExprInfo coerce( ExprInfo, llvm::Type * t = nullptr );
     bool castable( llvm::Type *, llvm::Type * );

@@ -62,12 +62,14 @@ false                   return p::make_CONSTANT_I( {1, 0}, l );
 
 NULL                    return p::make_NULLPTR( l );
 
-void                    return p::make_TYPE_NAME( {TYPEID::VOID, yytext}, l);
-long                    return p::make_TYPE_NAME( {TYPEID::LONG, yytext}, l);
-int                     return p::make_TYPE_NAME( {TYPEID::INT, yytext}, l);
-short                   return p::make_TYPE_NAME( {TYPEID::SHORT, yytext}, l);
-char                    return p::make_TYPE_NAME( {TYPEID::CHAR, yytext}, l);
-bool                    return p::make_TYPE_NAME( {TYPEID::BOOL, yytext}, l);
+typedef                 return {tok::TYPEDEF, l};
+
+void                    |
+long                    |
+int                     |
+short                   |
+char                    |
+bool                    return p::make_TYPE_NAME( ctx.find_type( yytext ), l );
 
 return                  return {tok::RETURN, l};
 if                      return {tok::IF, l};

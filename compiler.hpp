@@ -42,7 +42,7 @@ struct Compiler {
         , errf( err )
         , name( name )
         , ctx( name )
-        , lexer( in, out )
+        , lexer( ctx, in, out )
         , parser( ctx, lexer )
     {
         errf << "This is Seagol compiler version 0.0.0-alpha." << std::endl;

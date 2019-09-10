@@ -14,8 +14,10 @@
 namespace seagol {
 
 struct Lexer : yyFlexLexer {
-    /* Forward constructors */
-    using yyFlexLexer::yyFlexLexer;
+    Context &ctx;
+
+    Lexer( Context &ctx, std::istream& in, std::ostream &out )
+        : yyFlexLexer( in, out ), ctx( ctx ) {};
 
     /* Equivalent of yylex(), implemented in Flex-generated lexer.cpp */
     yy::parser::symbol_type next();
@@ -61,7 +63,8 @@ struct Lexer : yyFlexLexer {
 
     auto make_identifier_or_type( const char *iden )
     {
-        // TODO: ask the driver whether the identifier names a type
+        if ( auto *ty = ctx.find_type( iden ) )
+            return yy::parser::make_TYPE_NAME( ty, loc );
         return yy::parser::make_IDENTIFIER( iden, loc );
     }
 

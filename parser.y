@@ -46,11 +46,12 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token TODO "unimplemented"
 
 %token <std::string> IDENTIFIER "identifier"
-%token <seagol::TypeName> TYPE_NAME "type name"
+%token <llvm::Type*> TYPE_NAME "type name"
 %token <seagol::ConstantInt> CONSTANT_I "integral constant"
 %token <std::string> CONSTANT_S "string constant"
 %token NULLPTR "NULL"
 
+%token TYPEDEF "typedef"
 %token RETURN "return"
 %token IF "if"
 %token ELSE "else"
@@ -94,6 +95,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <seagol::IdentifierInfo*> toplevel_identifier
 %type <seagol::IdentifierInfo*> fresh_identifier
 %type <seagol::IdentifierInfo*> identifier
+%type <std::string> nodecl_fresh_identifier
 %type <seagol::IdentifierInfo*> argument_decl
 %type <seagol::IdentifierInfo*> declaration
 
@@ -114,6 +116,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <seagol::ExprInfo> postfix_expr
 %type <seagol::ExprInfo> primary_expr
 %type <seagol::ExprInfo> _coerce
+%type <llvm::Constant*> _const
 
 %type <seagol::IfInfo> _if
 
@@ -161,6 +164,15 @@ _addressable: %empty {
 _isptr: %empty {
             if ( ! $<seagol::ExprInfo>0.derefable() )
                 error( @0, "expression is not of pointer type" );
+        } ;
+
+/* Usage in rules: <ExprInfo> _const */
+_const: %empty {
+            auto *llval = $<seagol::ExprInfo>0.llval;
+            if ( auto *cexpr = llvm::dyn_cast< llvm::Constant >( llval ) ) {
+                $$ = cexpr;
+            } else
+                error( @0, "expression is not (blatantly) constant" );
         } ;
 
 toplevel
@@ -220,13 +232,10 @@ toplevel_entry
         if ( llvm::cast< llvm::GlobalVariable >( $vii->llval )->hasInitializer() )
             error( @vii, "`"s + $vii->name + "\' was already initialised" );
         IRB.SetInsertPoint( ctx.bb_trash );
-    }   expr <llvm::Type*>{ $$ = $ty; } _coerce[ini] ';' {
-        if ( auto *cexpr = llvm::dyn_cast< llvm::Constant >( $ini.llval ) ) {
-            llvm::cast< llvm::GlobalVariable >( $vii->llval )->setInitializer( cexpr );
-        } else
-            error( @ini, "expression is not (blatantly) constant" );
-
+    }   expr <llvm::Type*>{ $$ = $ty; } _coerce _const[ini] ';' {
+            llvm::cast< llvm::GlobalVariable >( $vii->llval )->setInitializer( $ini );
     }
+    | TYPEDEF type nodecl_fresh_identifier ';' { ctx.decl_type( $3, $2 ); }
     ;
 
 toplevel_identifier /* may or may not be already declared */
@@ -254,12 +263,16 @@ identifier /* must exist */
         }
     ;
 
+nodecl_fresh_identifier /* must not exist, doesn't get declared */
+    : IDENTIFIER
+        {   if ( ctx.find_id( $1 ) || ctx.find_type( $1 ) )
+                error( @1, "name `"s + $1 + "\' already in use" );
+            $$ = $1;
+        }
+
 
 type
     : TYPE_NAME
-        { if ( !($$ = ctx.get_type( $1.tid )))
-            error( @1, "`"s + $1.name + "\' does not name a type" );
-        }
     | type '*'
         { if ( $1->isVoidTy() )
               $$ = ctx.anyptr_ty;
