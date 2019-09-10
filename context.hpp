@@ -25,6 +25,7 @@ struct ScopeInfo {
 struct Context {
     llvm::LLVMContext llcontext;
     std::unique_ptr< llvm::Module > llmodule;
+    llvm::DataLayout lldatalayout;
     std::vector< ScopeInfo > scope_stack;
     std::map< std::string, llvm::Type* > type_names;
     llvm::IRBuilder<> irb;
@@ -73,6 +74,7 @@ struct Context {
 
     Context( const std::string & name )
         : llmodule( new llvm::Module( name, llcontext ) )
+        , lldatalayout( llmodule.get() )
         , irb( llcontext )
         , bb_trash( llvm::BasicBlock::Create( llcontext, "trash" ) )
     {

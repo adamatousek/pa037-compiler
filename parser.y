@@ -55,6 +55,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token RETURN "return"
 %token IF "if"
 %token ELSE "else"
+%token SIZEOF "sizeof"
 
 %token ';' '(' ')' '{' '}' '!' '?' ':'
 %token L_OR "||"
@@ -119,6 +120,8 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <llvm::Constant*> _const
 
 %type <seagol::IfInfo> _if
+
+%type <llvm::BasicBlock*> _trashify
 
 %start toplevel
 
@@ -511,7 +514,29 @@ unary_expr
             }
         }
     }
+    | SIZEOF _trashify[bb] unary_expr[e] {
+        IRB.SetInsertPoint( $bb );
+        if ( ! $e.type()->isSized() )
+            error( @e, "expression type does not have size" );
+        auto sz = ctx.lldatalayout.getTypeAllocSize( $e.type() );
+        $$.llval = IRB.getInt32( sz );
+        $$.cat = seagol::Value::RVALUE;
+    }
+    | SIZEOF _trashify[bb] '(' type[ty] ')' {
+        IRB.SetInsertPoint( $bb );
+        if ( ! $ty->isSized() )
+            error( @ty, "type does not have size" );
+        auto sz = ctx.lldatalayout.getTypeAllocSize( $ty );
+        $$.llval = IRB.getInt32( sz );
+        $$.cat = seagol::Value::RVALUE;
+    }
     ;
+
+_trashify : %empty
+{
+    $$ = IRB.GetInsertBlock();
+    IRB.SetInsertPoint( ctx.bb_trash );
+} ;
 
 postfix_expr
     : primary_expr

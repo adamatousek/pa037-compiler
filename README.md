@@ -13,6 +13,7 @@ Nejvýraznějšími rozdíly oproti jazyku C jsou:
 - neexistují typy `unsigned`,
 - neexistují typy `float` a `double`,
 - neexistují konstantní a `volatile` proměnné a ukazatele,
+- neexistují statická pole,
 - neexistují součtové typy (`union`),
 - neexistují návěstí a související řídicí konstrukce (`goto`, `switch`),
 - neexistuje operátor čárka (sekvence výrazů),
@@ -22,7 +23,9 @@ Nejvýraznějšími rozdíly oproti jazyku C jsou:
 - všechny proměnné jsou buď globální, nebo lokální na zásobníku (v C se jedná
   o storage `auto`). Umístění nelze ovlivnit pomocí `register` či `static`.
 - neexistuje koncept konstantních výrazů (např. při zkracujících logických
-  operacích se vždy vygenerují instrukce skoku, i když by nemusely),
+  operacích se vždy vygenerují instrukce skoku, i když by nemusely); na místech,
+  kde je potřeba konstantní výrazy (inicialisace globálních proměnných) se může
+  použít jen takový výraz, který llvm::IRBuilder sám nahradí konstantou;
 - nelze definovat funkce s proměnným počtem parametrů (lze je ale deklarovat
   a volat, a tak používat například `printf` ze standardní knihovny jazyka C).
 

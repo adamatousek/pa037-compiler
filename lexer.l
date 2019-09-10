@@ -74,6 +74,7 @@ bool                    return p::make_TYPE_NAME( ctx.find_type( yytext ), l );
 return                  return {tok::RETURN, l};
 if                      return {tok::IF, l};
 else                    return {tok::ELSE, l};
+sizeof                  return {tok::SIZEOF, l};
 
 "<<"                    return {tok::SHL, l};
 ">>"                    return {tok::ASHR, l};
