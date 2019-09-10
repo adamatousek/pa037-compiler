@@ -250,12 +250,15 @@ void Context::start_fun( IdentifierInfo *fii, const ArgumentList & args )
 bool Context::end_fun()
 {
     auto bb_this = irb.GetInsertBlock();
-    if ( bb_this != bb_trash &&
-            std::all_of( llvm::pred_begin( bb_this ), llvm::pred_end( bb_this ),
-                      [this]( auto *bb ){ return bb == bb_trash; } ) )
+    auto bb_entry = &bb_this->getParent()->getEntryBlock();
+    if ( bb_this != bb_trash ) {
+        if ( bb_this != bb_entry &&
+                std::all_of( llvm::pred_begin( bb_this ), llvm::pred_end( bb_this ),
+                    [this]( auto *bb ){ return bb == bb_trash; } ) )
             bb_this->removeFromParent();
-    else if ( bb_this != bb_trash )
-        return false;
+        else
+            return false;
+    }
 
     bb_trash->removeFromParent();
     return true;
