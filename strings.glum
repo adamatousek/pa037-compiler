@@ -1,0 +1,20 @@
+// vim: ft=c
+
+// char * global_strings_not_supported = "HELLO, OUTER WORLD.";
+
+char nth( char *, int );
+
+void strings()
+{
+    char * s1 = "Hello, world!";
+    char * escaped = "Tab\t Backslash\\ Newline\n Quotation mark\"";
+    char T = 0[escaped];
+    char a = escaped[1];
+    char b = (&*escaped)[2];
+    char tab = nth( escaped, 3 );
+}
+
+char nth( char * s, int n )
+{
+    return ( s[n] + n[s] ) / 2;
+}
