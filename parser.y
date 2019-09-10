@@ -34,6 +34,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 
 #define pt( t ) (ctx.format_type(( t )))
 #define IRB (ctx.irb)
+#define LOOP (ctx.loop_stack.back())
 #define NOT_IMPLEMENTED(l) do { error( (l), "NOT IMPLEMENTED" ); } while(0);
 #define EI_RVal seagol::ExprInfo::RVal
 %}
@@ -56,6 +57,10 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token IF "if"
 %token ELSE "else"
 %token SIZEOF "sizeof"
+%token DO "do"
+%token WHILE "while"
+%token BREAK "break"
+%token CONTINUE "continue"
 
 %token ';' '(' ')' '{' '}' '!' '?' ':'
 %token L_OR "||"
@@ -178,6 +183,11 @@ _const: %empty {
                 error( @0, "expression is not (blatantly) constant" );
         } ;
 
+_inloop: %empty {
+             if ( ctx.loop_stack.empty() )
+                 error( @0, "statement can be used only within a loop" );
+        } ;
+
 toplevel
     : toplevel_entry_list END_OF_FILE
     ;
@@ -208,7 +218,7 @@ toplevel_entry
       block_stmt _close[end] {
           if ( $rt->isVoidTy() && IRB.GetInsertBlock() != ctx.bb_trash ) {
               IRB.CreateRetVoid();
-              ctx.after_return();
+              ctx.discard();
           }
           if ( !ctx.end_fun() )
               error( @end, "control reaches end of non-void function" );
@@ -234,7 +244,7 @@ toplevel_entry
                     + pt( oldt ) + "\'" );
         if ( llvm::cast< llvm::GlobalVariable >( $vii->llval )->hasInitializer() )
             error( @vii, "`"s + $vii->name + "\' was already initialised" );
-        IRB.SetInsertPoint( ctx.bb_trash );
+        ctx.discard();
     }   expr <llvm::Type*>{ $$ = $ty; } _coerce _const[ini] ';' {
             llvm::cast< llvm::GlobalVariable >( $vii->llval )->setInitializer( $ini );
     }
@@ -347,15 +357,18 @@ statement
         auto *rty = IRB.getCurrentFunctionReturnType();
         if ( ! rty->isVoidTy() )
             error( @2, "expected expression of type `"s + pt( rty ) + "\'" );
-        IRB.CreateRetVoid(); ctx.after_return();
+        IRB.CreateRetVoid(); ctx.discard();
     }
     | RETURN expression <llvm::Type*>{ $$ = IRB.getCurrentFunctionReturnType(); }
-      _coerce[res] ';' { IRB.CreateRet( $res.llval ); ctx.after_return(); }
+      _coerce[res] ';' { IRB.CreateRet( $res.llval ); ctx.discard(); }
     | ';'
     | expression ';'
     | declaration ';'
     | declaration[l] '=' expression <llvm::Type*>{ $$ = $l->type; } _coerce[r] ';'
         { IRB.CreateStore( $r.llval, $l->llval ); }
+    | _loop_prepare loop_stmt _loop_finish
+    | CONTINUE _inloop ';' { IRB.CreateBr( LOOP.bb_cont ); ctx.discard(); }
+    | BREAK _inloop ';' { IRB.CreateBr( LOOP.bb_false ); ctx.discard(); }
     ;
 
 declaration
@@ -402,6 +415,36 @@ _else: %empty
         auto & _if = $<seagol::IfInfo>-8;
         IRB.CreateBr( _if.bb_cont );
         IRB.SetInsertPoint( _if.bb_false );
+    } ;
+
+loop_stmt
+    : WHILE '('
+        { IRB.CreateBr( LOOP.bb_cont ); IRB.SetInsertPoint( LOOP.bb_cont ); }
+        expression _bool _coerce[p] ')'
+        { IRB.CreateCondBr( $p.llval, LOOP.bb_true, LOOP.bb_false );
+          IRB.SetInsertPoint( LOOP.bb_true ); }
+        statement
+        { IRB.CreateBr( LOOP.bb_cont ); }
+    | DO { IRB.CreateBr( LOOP.bb_true ); IRB.SetInsertPoint( LOOP.bb_true ); }
+        statement
+        WHILE'('
+        { IRB.CreateBr( LOOP.bb_cont ); IRB.SetInsertPoint( LOOP.bb_cont ); }
+        expression _bool _coerce[p] ')'
+        { IRB.CreateCondBr( $p.llval, LOOP.bb_true, LOOP.bb_false ); }
+    ;
+
+_loop_prepare: %empty
+    {
+        auto *bb_false = ctx.mk_bb( "loop.after" );
+        auto *bb_true = ctx.mk_bb( "loop.body" );
+        auto *bb_cont = ctx.mk_bb( "loop.cond" );
+        ctx.loop_stack.push_back({ bb_true, bb_false, bb_cont });
+    } ;
+
+_loop_finish: %empty
+    {
+        IRB.SetInsertPoint( LOOP.bb_false );
+        ctx.loop_stack.pop_back();
     } ;
 
 expression
@@ -535,7 +578,7 @@ unary_expr
 _trashify : %empty
 {
     $$ = IRB.GetInsertBlock();
-    IRB.SetInsertPoint( ctx.bb_trash );
+    ctx.discard();
 } ;
 
 postfix_expr

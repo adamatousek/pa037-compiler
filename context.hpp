@@ -27,6 +27,7 @@ struct Context {
     std::unique_ptr< llvm::Module > llmodule;
     llvm::DataLayout lldatalayout;
     std::vector< ScopeInfo > scope_stack;
+    std::vector< IfInfo > loop_stack;
     std::map< std::string, llvm::Type* > type_names;
     llvm::IRBuilder<> irb;
     llvm::BasicBlock* bb_trash;
@@ -58,7 +59,7 @@ struct Context {
                             llvm::Type** );
     void start_fun( IdentifierInfo*, const ArgumentList & );
     bool end_fun(); /* whether a return instruction is present */
-    void after_return();
+    void discard();
 
     std::string push_param( CallInfo*, const ExprInfo & );
 

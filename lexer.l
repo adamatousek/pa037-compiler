@@ -75,6 +75,10 @@ return                  return {tok::RETURN, l};
 if                      return {tok::IF, l};
 else                    return {tok::ELSE, l};
 sizeof                  return {tok::SIZEOF, l};
+do                      return {tok::DO, l};
+while                   return {tok::WHILE, l};
+break                   return {tok::BREAK, l};
+continue                return {tok::CONTINUE, l};
 
 "<<"                    return {tok::SHL, l};
 ">>"                    return {tok::ASHR, l};

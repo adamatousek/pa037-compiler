@@ -282,7 +282,7 @@ bool Context::end_fun()
     return true;
 }
 
-void Context::after_return()
+void Context::discard()
 {
     irb.SetInsertPoint( bb_trash );
 }
