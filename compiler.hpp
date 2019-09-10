@@ -27,6 +27,8 @@ struct Compiler {
     std::ostream &outf;
     std::ostream &errf;
 
+    std::string name;
+
     Context ctx;
     Lexer lexer;
     yy::parser parser;
@@ -38,6 +40,7 @@ struct Compiler {
         : inf( in )
         , outf( out )
         , errf( err )
+        , name( name )
         , ctx( name )
         , lexer( in, out )
         , parser( ctx, lexer )

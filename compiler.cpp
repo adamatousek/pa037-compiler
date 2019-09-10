@@ -81,11 +81,11 @@ int Compiler::run()
     llvm::VerifierAnalysis ver;
     ver.run( *ctx.llmodule, am );
 
-    // llvm::raw_os_ostream lloutf{ outf };
-    // ctx.llmodule->print(lloutf, nullptr);
+    llvm::raw_os_ostream lloutf{ outf };
+    ctx.llmodule->print( lloutf, nullptr );
 
     std::error_code errc;
-    llvm::raw_fd_ostream dest("out.o", errc, llvm::sys::fs::OF_None);
+    llvm::raw_fd_ostream dest( name + ".o", errc, llvm::sys::fs::OF_None );
     if ( errc ) {
         errf << "cannot open file for writing: " << errc.message() << std::endl;
         return 1;
