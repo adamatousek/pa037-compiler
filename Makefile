@@ -1,6 +1,9 @@
+.PHONY: test
+
 llvmFLAGS = $(shell llvm-config-7 --cflags)
 llvmLDFLAGS = $(shell llvm-config-7 --ldflags)
 llvmLIBS = $(shell llvm-config-7 --libs)
+DEMO_FILES = $(wildcard demo/*.glum)
 
 SEAGOL_DEFINES = -DSEAGOL_RELAX_WARNINGS="_Pragma( \"GCC diagnostic push\" ) \
      _Pragma( \"GCC diagnostic ignored \\\"-Wold-style-cast\\\"\" ) \
@@ -21,3 +24,12 @@ lexer.cpp: lexer.l lexer.hpp parser.hpp
 
 parser.cpp: parser.y compiler.hpp semantic.hpp
 	bison $(YACCFLAGS) --defines=$(<:.y=.hpp) -o $@ $<
+
+
+test: $(DEMO_FILES:=.o)
+
+$(DEMO_FILES:=.o): %.o: seagolc %
+	./$< $*
+
+# Disable this implicit rule:
+%: %.o
