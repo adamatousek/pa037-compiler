@@ -1,4 +1,4 @@
-.PHONY: test
+.PHONY: test FORCE
 
 llvmFLAGS = $(shell llvm-config-7 --cflags)
 llvmLDFLAGS = $(shell llvm-config-7 --ldflags)
@@ -28,8 +28,11 @@ parser.cpp: parser.y compiler.hpp semantic.hpp
 
 test: $(DEMO_FILES:=.o)
 
-$(DEMO_FILES:=.o): %.o: seagolc %
-	./$< $*
+$(DEMO_FILES:=.o): %.o: % FORCE
+	ls seagolc || $(MAKE) seagolc
+	./seagolc $*
+
+FORCE:
 
 # Disable this implicit rule:
 %: %.o
