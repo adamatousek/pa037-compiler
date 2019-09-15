@@ -92,6 +92,16 @@ continue                return {tok::CONTINUE, l};
 "->"                    return {tok::ARR, l};
 "++"                    return {tok::INC, l};
 "--"                    return {tok::DEC, l};
+"+="                    return {tok::ASGN_ADD, l};
+"-="                    return {tok::ASGN_SUB, l};
+"*="                    return {tok::ASGN_MUL, l};
+"/="                    return {tok::ASGN_DIV, l};
+"%="                    return {tok::ASGN_MOD, l};
+"|="                    return {tok::ASGN_OR , l};
+"^="                    return {tok::ASGN_XOR, l};
+"&="                    return {tok::ASGN_AND, l};
+"<<="                   return {tok::ASGN_SHL, l};
+">>="                   return {tok::ASGN_SHR, l};
 
 {HEAD}{WORD}*           return make_identifier_or_type( yytext );
 

@@ -76,6 +76,16 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token ARR "->"
 %token INC "++"
 %token DEC "--"
+%token ASGN_ADD "+="
+%token ASGN_SUB "-="
+%token ASGN_MUL "*="
+%token ASGN_DIV "/="
+%token ASGN_MOD "%="
+%token ASGN_OR  "|="
+%token ASGN_XOR "^="
+%token ASGN_AND "&="
+%token ASGN_SHL "<<="
+%token ASGN_SHR ">>="
 
 %nonassoc ELSELESS
 %nonassoc ELSE
@@ -116,6 +126,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 
 %type <seagol::ExprInfo> arg
 %type <seagol::ExprInfo> expression
+%type <llvm::Instruction::BinaryOps> assignment_operator
 %type <seagol::ExprInfo> expr
 %type <seagol::ExprInfo> bexpr
 %type <seagol::ExprInfo> aexpr
@@ -469,6 +480,23 @@ expression
         IRB.CreateStore( $r.llval, $l.llval );
         $$ = $l;
     }
+    | unary_expr[l] _lvalue assignment_operator[op] expression[e]
+        <seagol::ExprInfo>{ $$ = ctx.mk_arith( this, @e, $l, $e, $op ); }
+        <llvm::Type*>{ $$ = $l.type(); } _coerce[r]
+        { IRB.CreateStore( $r.llval, $l.llval ); $$ = $l; }
+    ;
+
+assignment_operator
+    : "+="  { $$ = llvm::Instruction::Add ; }
+    | "-="  { $$ = llvm::Instruction::Sub ; }
+    | "*="  { $$ = llvm::Instruction::Sub ; }
+    | "/="  { $$ = llvm::Instruction::SDiv; }
+    | "%="  { $$ = llvm::Instruction::SRem; }
+    | "|="  { $$ = llvm::Instruction::Or  ; }
+    | "^="  { $$ = llvm::Instruction::Xor ; }
+    | "&="  { $$ = llvm::Instruction::And ; }
+    | "<<=" { $$ = llvm::Instruction::Shl ; }
+    | ">>=" { $$ = llvm::Instruction::AShr; }
     ;
 
 expr
