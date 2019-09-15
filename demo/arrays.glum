@@ -1,0 +1,10 @@
+// vim: ft=c
+
+int * array_to_ptr( int n )
+{
+    int x[ n ];
+    x[2] = 5;
+    if ( x[ 4 ] )
+        return x + 3;
+    return x;
+}
