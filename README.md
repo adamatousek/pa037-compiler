@@ -13,9 +13,12 @@ Nejvýraznějšími rozdíly oproti jazyku C jsou:
 - neexistují typy `unsigned`,
 - neexistují typy `float` a `double`,
 - neexistují konstantní a `volatile` proměnné a ukazatele,
-- neexistují statická pole,
-- neexistují součtové typy (`union`),
+- neexistují struktury (`struct`), součtové typy (`union`) ani výčtové typy
+  (`enum`),
 - neexistují návěstí a související řídicí konstrukce (`goto`, `switch`),
+- pole jsou jen lokální, jednorozměrná a nelze je rovnou inicialisovat, jejich
+  velikost ale nemusí být známa v době překladu,
+- `sizeof` na polích vrací velikost ukazatele,
 - neexistuje operátor čárka (sekvence výrazů),
 - podobně jako v C++ sdílí datové struktury jmenný prostor s jinými
   identifikátory a není nutné před ně při použití psát `struct`,

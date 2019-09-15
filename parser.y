@@ -104,6 +104,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <std::string> nodecl_fresh_identifier
 %type <seagol::IdentifierInfo*> argument_decl
 %type <seagol::IdentifierInfo*> declaration
+%type <seagol::IdentifierInfo*> array_declaration
 
 %type <seagol::ArgumentList> arguments
 %type <seagol::ArgumentList> argument_decl_list
@@ -364,6 +365,7 @@ statement
     | ';'
     | expression ';'
     | declaration ';'
+    | array_declaration ';'
     | declaration[l] '=' expression <llvm::Type*>{ $$ = $l->type; } _coerce[r] ';'
         { IRB.CreateStore( $r.llval, $l->llval ); }
     | _loop_prepare loop_stmt _loop_finish
@@ -376,6 +378,13 @@ declaration
         $$ = $2;
         $$->type = $1;
         $$->llval = IRB.CreateAlloca( $$->type, nullptr, $$->name + ".addr" );
+    }
+    ;
+array_declaration
+    : complete_type fresh_identifier '[' expression _i64 _coerce[sz] ']' {
+        $$ = $2;
+        $$->type = llvm::ArrayType::get( $1, 0 );
+        $$->llval = IRB.CreateAlloca( $1, $sz.llval, $$->name );
     }
     ;
 
@@ -652,6 +661,8 @@ primary_expr
         $$.llval = $1->llval;
         if ( llvm::isa< llvm::Function >( $$.llval ) ) {
             $$.cat = seagol::Value::FVALUE;
+        } else if ( $1->type->isArrayTy() ) {
+            $$.cat = seagol::Value::RVALUE;
         } else {
             $$.cat = seagol::Value::LVALUE;
         }
