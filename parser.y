@@ -132,6 +132,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %type <seagol::ExprInfo> aexpr
 %type <seagol::ExprInfo> cast_expr
 %type <seagol::ExprInfo> unary_expr
+%type <llvm::Instruction::BinaryOps> crement_operator
 %type <seagol::ExprInfo> postfix_expr
 %type <seagol::ExprInfo> primary_expr
 %type <seagol::ExprInfo> _coerce
@@ -600,6 +601,13 @@ unary_expr
             }
         }
     }
+    | crement_operator[op] unary_expr[e] _lvalue {
+        seagol::ExprInfo one;
+        one.llval = IRB.getInt8( 1 );
+        one.cat = seagol::Value::CVALUE;
+        $$ = ctx.mk_arith( this, @$, $e, one, $op );
+        IRB.CreateStore( $$.llval, $e.llval );
+    }
     | SIZEOF _trashify[bb] unary_expr[e] {
         IRB.SetInsertPoint( $bb );
         if ( ! $e.type()->isSized() )
@@ -616,6 +624,11 @@ unary_expr
         $$.llval = IRB.getInt32( sz );
         $$.cat = seagol::Value::RVALUE;
     }
+    ;
+
+crement_operator
+    : "++" { $$ = llvm::Instruction::Add; }
+    | "--" { $$ = llvm::Instruction::Sub; }
     ;
 
 _trashify : %empty
@@ -635,6 +648,14 @@ postfix_expr
                         + pt( $r.type() ) + "'" );
         assert( ! $$.addressable() );
         $$.cat = seagol::Value::LVALUE;
+    }
+    | postfix_expr[e] _lvalue crement_operator[op] {
+        $$ = ctx.coerce( $e );
+        seagol::ExprInfo one;
+        one.llval = IRB.getInt8( 1 );
+        one.cat = seagol::Value::CVALUE;
+        auto modified = ctx.mk_arith( this, @$, $$, one, $op );
+        IRB.CreateStore( modified.llval, $e.llval );
     }
     ;
 
