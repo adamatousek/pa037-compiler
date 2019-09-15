@@ -45,9 +45,15 @@ std::string Context::format_type( llvm::Type *ty ) const
             s += format_type( p );
             first = false;
         }
+        if ( fty->isVarArg() ) {
+            if ( !first )
+                s += ", ";
+            s += "...";
+        }
         s += ")";
         return s;
     }
+    ty->dump();
     return "<TODO>";
 }
 
@@ -223,7 +229,7 @@ bool /*TODO*/ Context::decl_fun( IdentifierInfo *fn, llvm::Type* ret_type,
     argtys.reserve( args.args.size() );
     for ( auto * a : args.args )
         argtys.push_back( a->type );
-    auto ftype = llvm::FunctionType::get( ret_type, argtys, false );
+    auto ftype = llvm::FunctionType::get( ret_type, argtys, args.variadic );
     if ( fn->type ) {
         if ( ftype != fn->type ) { /* redeclaration with different type */
             if ( old_type )
@@ -289,15 +295,22 @@ void Context::discard()
 
 std::string Context::push_param( CallInfo* ci, const ExprInfo &arg )
 {
-    if ( ci->param_it == ci->param_end )
-        return std::string( "too many arguments (function requires " ) +
-            std::to_string( ci->ftype->getNumParams() ) + ')';
-    if ( !coercible( arg.type(), *ci->param_it ) )
+    llvm::Type *to;
+    if ( ci->param_it == ci->param_end ) {
+        if ( ! ci->ftype->isVarArg() )
+            return std::string( "too many arguments (function requires " ) +
+                std::to_string( ci->ftype->getNumParams() ) + ')';
+        to = ( !arg.pointer() && arg.type()->getPrimitiveSizeInBits() <= 32 )
+            ? irb.getInt32Ty() : arg.type();
+    } else {
+        to = *ci->param_it;
+        ci->param_it++;
+    }
+    if ( !coercible( arg.type(), to ) )
         return std::string( "invalid conversion from `" ) +
-            format_type( arg.type() ) + "\' to `" + format_type( *ci->param_it )
+            format_type( arg.type() ) + "\' to `" + format_type( to )
             + "\' on argument " + std::to_string( ci->args.size() + 1 );
-    ci->args.push_back( coerce( arg, *ci->param_it ).llval );
-    ci->param_it++;
+    ci->args.push_back( coerce( arg, to ).llval );
     return {};
 }
 

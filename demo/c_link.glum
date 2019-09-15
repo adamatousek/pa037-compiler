@@ -4,27 +4,40 @@
  *        S T A N D A R D   C   L I B R A R Y      {{{
  *****************************************************/
 typedef void FILE; /* until at least forward declared structs are a thing */
+typedef char * string;
 
 FILE * stdin;
 FILE * stdout;
 
-int puts( char * );
+int puts( string );
 int putchar( int );
+int printf ( string, ... );
 
-long getline( char **, long *, FILE * );
+long getline( string*, long *, FILE * );
+int scanf( string, ... );
+
+int strlen( string );
 
 void * malloc( long );
 void free( void * );
 
 /*********************************************** }}} */
 
+void remove_newline( string, int );
 int main()
 {
     puts( "Hullo, my precious!\nWhat is thy name?" );
     char *line = NULL;
     long bufl = 0;
     long len = getline( &line, &bufl, stdin );
-    puts( line );
+    remove_newline( line, len );
+    printf( "Your name, %s, is %d characters long.\n", line, strlen( line ) );
     free( line );
     return 0;
+}
+
+void remove_newline( char * str, int n )
+{
+    if ( str[ n - 1 ] == '\n' )
+        str[ n - 1 ] = 0;
 }

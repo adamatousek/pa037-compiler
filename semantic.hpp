@@ -60,6 +60,7 @@ struct IdentifierInfo {
 
 struct ArgumentList {
     std::vector<IdentifierInfo*> args;
+    bool variadic = false;
 };
 
 struct ConstantInt {

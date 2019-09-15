@@ -80,6 +80,7 @@ while                   return {tok::WHILE, l};
 break                   return {tok::BREAK, l};
 continue                return {tok::CONTINUE, l};
 
+"..."                   return {tok::ELLIPSIS, l};
 "<<"                    return {tok::SHL, l};
 ">>"                    return {tok::ASHR, l};
 "=="                    return {tok::EQ, l};

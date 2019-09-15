@@ -61,6 +61,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token WHILE "while"
 %token BREAK "break"
 %token CONTINUE "continue"
+%token ELLIPSIS "..."
 
 %token ';' '(' ')' '{' '}' '!' '?' ':'
 %token L_OR "||"
@@ -214,6 +215,8 @@ toplevel_entry
             + pt( oldt ) + "\'" );
         if ( ! llvm::cast< llvm::Function >( $fii->llval )->isDeclaration() )
             error( @fii, "`"s + $fii->name + "\' was already defined" );
+        if ( $args.variadic )
+            error( @$, "variadic functions can be only declared" );
         ctx.start_fun( $fii, $args );
     }
       block_stmt _close[end] {
@@ -322,7 +325,10 @@ complete_type
 
 arguments
     : '(' _open ')' { $$.args = {}; }
+    | '(' _open ELLIPSIS ')' { $$.args = {}; $$.variadic = true; }
     | '(' _open argument_decl_list ')' { $$ = std::move( $3 ); }
+    | '(' _open argument_decl_list ',' ELLIPSIS ')'
+        { $$ = std::move( $3 ); $$.variadic = true; }
     ;
 
 argument_decl_list
