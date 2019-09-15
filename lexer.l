@@ -89,7 +89,6 @@ continue                return {tok::CONTINUE, l};
 ">="                    return {tok::GEQ, l};
 "&&"                    return {tok::L_AND, l};
 "||"                    return {tok::L_OR, l};
-"->"                    return {tok::ARR, l};
 "++"                    return {tok::INC, l};
 "--"                    return {tok::DEC, l};
 "+="                    return {tok::ASGN_ADD, l};

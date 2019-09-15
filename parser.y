@@ -44,7 +44,6 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %parse-param { seagol::Lexer &lexer }
 
 %token END_OF_FILE 0 "end of file"
-%token TODO "unimplemented"
 
 %token <std::string> IDENTIFIER "identifier"
 %token <llvm::Type*> TYPE_NAME "type name"
@@ -71,9 +70,7 @@ void chk_and_add_arg( seagol::CallInfo* ci, const seagol::ExprInfo &arg,
 %token LEQ "<="
 %token GEQ ">="
 %token SHL "<<"
-/* %token LSHR ">>" */
 %token ASHR ">>"
-%token ARR "->"
 %token INC "++"
 %token DEC "--"
 %token ASGN_ADD "+="
