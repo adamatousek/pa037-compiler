@@ -32,6 +32,10 @@ $(DEMO_FILES:=.o): %.o: % FORCE
 	ls seagolc || $(MAKE) seagolc
 	./seagolc $*
 
+$(DEMO_FILES:.glum=): %: %.glum.o
+	@echo "Linking with libc"
+	clang -o $@ $<
+
 FORCE:
 
 # Disable this implicit rule:

@@ -1,0 +1,117 @@
+// vim: ft=c
+
+/* C library */
+
+int printf( char *, ... );
+
+/* End of C library */
+
+void no_sort( int *, int ) {}
+void select_sort( int *, int );
+void quick_sort( int *, int );
+
+bool sort_tester( void(*)( int *, int ) sort )
+{
+    int array[ 20 ];
+    array[  0 ] = 80;
+    array[  1 ] = 42;
+    array[  2 ] = 3;
+    array[  3 ] = 19;
+    array[  4 ] = 20;
+    array[  5 ] = 67;
+    array[  6 ] = 8;
+    array[  7 ] = 1;
+    array[  8 ] = 52;
+    array[  9 ] = 3;
+    array[ 10 ] = 82;
+    array[ 11 ] = 81;
+    array[ 12 ] = 80;
+    array[ 13 ] = 17;
+    array[ 14 ] = 10;
+    array[ 15 ] = 65;
+    array[ 16 ] = 3;
+    array[ 17 ] = 33;
+    array[ 18 ] = 8;
+    array[ 19 ] = 2;
+
+    sort( array, 20 );
+
+    int i = 0;
+    int last = array[ 0 ];
+    bool sorted = true;
+    while ( i < 20 ) {
+        printf( "%d, ", array[ i ] );
+        if ( array[ i ] < last )
+            sorted = false;
+        last = array[ i ];
+        ++i;
+    }
+    if ( sorted )
+        printf( "sorted OK\n" );
+    else
+        printf( "not sorted NOK\n" );
+    return sorted;
+}
+
+int main()
+{
+    printf( "Input array:\n" );
+    sort_tester( no_sort );
+    bool ok = true;
+    printf( "Selection sort:\n" );
+    ok &= sort_tester( select_sort );
+    printf( "Quicksort:\n" );
+    ok &= sort_tester( quick_sort );
+    return !ok;
+}
+
+void select_sort( int * a, int n )
+{
+    int * end = a + n;
+    int * first_unsorted = a;
+    int * swap_candidate = a;
+    while ( first_unsorted < end ) {
+        swap_candidate = first_unsorted;
+        int * it = first_unsorted;
+        while ( ++it < end ) {
+            if ( *it < *swap_candidate )
+                swap_candidate = it;
+        }
+        if ( swap_candidate != first_unsorted ) {
+            int tmp = *first_unsorted;
+            *first_unsorted = *swap_candidate;
+            *swap_candidate = tmp;
+        }
+        ++first_unsorted;
+    }
+}
+
+void quick_sort( int * a, int n )
+{
+    if ( n < 2 )
+        return;
+
+    int pivot = a[ n / 2 ];
+
+    int i = 0;
+    int j = n - 1;
+    do {
+        while ( a[ i ] < pivot )
+            i++;
+        while ( a[ j ] > pivot )
+            j--;
+
+        if ( i >= j )
+            break;
+
+        int tmp = a[ i ];
+        a[ i ] = a[ j ];
+        a[ j ] = tmp;
+
+        ++i;
+        --j;
+    } while ( true );
+
+    quick_sort( a, i );
+    quick_sort( a + i, n - i );
+}
