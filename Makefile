@@ -27,6 +27,7 @@ parser.cpp: parser.y compiler.hpp semantic.hpp
 
 
 test: $(DEMO_FILES:=.o)
+demos: demo/c_link demo/c_sorts
 
 $(DEMO_FILES:=.o): %.o: % FORCE
 	ls seagolc || $(MAKE) seagolc

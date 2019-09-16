@@ -14,9 +14,8 @@ default:
 build:
     extends: .template
     stage: build
-    before_script:
-        - apt-get install -y clang clang-tools flex bison libfl-dev
     script:
+        - apt-get install -y clang clang-tools flex bison libfl-dev
         - make seagolc
     when: always
     artifacts:
@@ -35,5 +34,6 @@ linkage:
     extends: .template
     stage: test
     script:
+        - apt-get install -y clang
         - make demos
         - demo/sorts
