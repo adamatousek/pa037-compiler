@@ -1,43 +1,39 @@
-image: haskell-ib015:v1.2
+default:
+    image: haskell-ib015:v1.2
+    before_script:
+            - apt-get update
+            - apt-get install -y libllvm7
 
-before_script:
-        - apt-get update
-        - apt-get install -y libllvm7
+.template:
+    except:
+        variables:
+            - $CI_COMMIT_MESSAGE =~ /\bno[-_]?ci\b/
+    tags:
+        - shared-fi
+
 build:
+    extends: .template
     stage: build
     before_script:
         - apt-get install -y clang clang-tools flex bison libfl-dev
     script:
         - make seagolc
     when: always
-    except:
-        variables:
-            - $CI_COMMIT_MESSAGE =~ /\bno[-_]?ci\b/
     artifacts:
         name: "binary"
         paths:
             - seagolc
         expire_in: 20 minutes
-    tags:
-        - shared-fi
 
 test:
+    extends: .template
     stage: test
     script:
         - make test
-    except:
-        variables:
-            - $CI_COMMIT_MESSAGE =~ /\bno[-_]?(test|ci)\b/
-    tags:
-        - shared-fi
 
 linkage:
+    extends: .template
     stage: test
     script:
         - make demos
         - demo/sorts
-    except:
-        variables:
-            - $CI_COMMIT_MESSAGE =~ /\bno[-_]?(test|ci)\b/
-    tags:
-        - shared-fi
